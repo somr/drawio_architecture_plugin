@@ -34,6 +34,15 @@ Lists all shapes connected to the selected shape via a connector, with:
 ### Also in...
 Lists other pages in the file that contain a shape with the same name and level. Each entry is a clickable link that switches to that page and centres the viewport on the matching shape.
 
+### Architecture report
+
+When no shape is selected, a green **Generate architecture report** button appears at the bottom of the panel. Clicking it exports the current page as a PNG and produces a Markdown document that includes the image and describes all eligible shapes in hierarchy order. Both files are saved next to the `.drawio` file using a `{diagramname}_{pagename}` naming convention.
+
+The Markdown document structure:
+- H1 page title with embedded PNG
+- H2–H6 headings per shape level (Organisation → Node), with description and connections
+- An **Uncategorised** section for shapes not contained within any Organisation
+
 ### Missing properties prompt
 When a shape with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes can also be marked as *Ignored* to suppress the prompt permanently.
 
