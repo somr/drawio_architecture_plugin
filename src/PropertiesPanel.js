@@ -1,6 +1,8 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.4.2';
+var PLUGIN_VERSION = '1.5';
+
+var ArchitectureReport = require('./ArchitectureReport');
 
 /**
  * PropertiesPanel
@@ -22,6 +24,8 @@ function PropertiesPanel(ui, shapeProps) {
   this.parentDisplay = null;
   this.unignoreBtn = null;
   this.adoptBtn = null;
+  this.reportBtn = null;
+  this.report = new ArchitectureReport(ui, shapeProps);
   this.connectionsSection = null;
   this.connectionsList = null;
   this.alsoInSection = null;
@@ -45,6 +49,7 @@ PropertiesPanel.prototype.init = function() {
   this._buildAdoptButton(container);
   this._buildConnectionsList(container);
   this._buildAlsoIn(container);
+  this._buildReportButton(container);
 
   // Create a persistent mxWindow that cannot be closed.
   // Initial position is top-right; the user can move it freely.
@@ -367,6 +372,7 @@ PropertiesPanel.prototype.populate = function(cell) {
   this._updateParentDisplay(cell, graph);
   this._setFieldsDisabled(false);
   this.unignoreBtn.style.display = 'none';
+  this.reportBtn.style.display = 'none';
   this._updateAdoptButton(sp.getChildLevel(level));
   this._updateConnections(cell);
   this._updateAlsoIn(cell);
@@ -397,6 +403,7 @@ PropertiesPanel.prototype.setIgnored = function(cell) {
   this.parentDisplay.style.color = '#aaa';
   this.unignoreBtn.style.display = 'block';
   this.adoptBtn.style.display = 'none';
+  this.reportBtn.style.display = 'none';
   this.connectionsSection.style.display = 'none';
   this.alsoInSection.style.display = 'none';
 };
@@ -412,6 +419,7 @@ PropertiesPanel.prototype.setEmpty = function() {
   this.parentDisplay.style.color = '#aaa';
   this.unignoreBtn.style.display = 'none';
   this.adoptBtn.style.display = 'none';
+  this.reportBtn.style.display = 'block';
   this.connectionsSection.style.display = 'none';
   this.alsoInSection.style.display = 'none';
 };
@@ -511,6 +519,33 @@ PropertiesPanel.prototype._updateAlsoIn = function(cell) {
   });
 
   this.alsoInSection.style.display = 'block';
+};
+
+PropertiesPanel.prototype._buildReportButton = function(container) {
+  var self = this;
+
+  var btn = document.createElement('button');
+  btn.textContent = 'Generate architecture report';
+  btn.style.cssText = [
+    'display:none',
+    'margin-top:12px',
+    'padding:8px 12px',
+    'border:none',
+    'border-radius:4px',
+    'background:#2e7d32',
+    'color:#fff',
+    'font-size:12px',
+    'font-weight:bold',
+    'cursor:pointer',
+    'width:100%',
+  ].join(';');
+
+  btn.addEventListener('click', function() {
+    self.report.generate();
+  });
+
+  container.appendChild(btn);
+  this.reportBtn = btn;
 };
 
 // ---------------------------------------------------------------------------
