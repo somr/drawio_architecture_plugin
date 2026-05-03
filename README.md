@@ -5,7 +5,7 @@ A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds
 ## Features
 
 ### Properties panel
-A persistent floating panel always visible while the plugin is loaded. For each selected shape it shows:
+A persistent floating panel titled **Architect toolset** always visible while the plugin is loaded. For each selected shape it shows:
 
 - **Parent** — the direct container shape (read-only), or *— no parent —* if the shape sits at the diagram root
 - **Name** — editable text field

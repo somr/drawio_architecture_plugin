@@ -1,6 +1,6 @@
 # DrawIO Properties Plugin — Application Specification
 
-Version: 1.4.1
+Version: 1.4.2
 Status: Approved
 
 ---
@@ -56,7 +56,7 @@ Organization shapes are at the top of the hierarchy and are never placed inside 
 
 ### 5.1 Display
 
-A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title includes the current plugin version (e.g. `Shape Properties v1.4.1`) to allow users to confirm the deployed version.
+A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.4.2`) to allow users to confirm the deployed version.
 
 The panel displays the following fields, in order:
 

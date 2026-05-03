@@ -1,12 +1,13 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.4.1';
+var PLUGIN_VERSION = '1.4.2';
 
 /**
  * PropertiesPanel
  *
- * A persistent floating panel (mxWindow) that displays and allows editing of
- * the Name, Level, and Description properties of the selected shape.
+ * The "Architect toolset" persistent floating panel (mxWindow) that displays
+ * and allows editing of the Name, Level, and Description properties of the
+ * selected shape.
  *
  * States:
  *   empty        — no shape selected, or multiple shapes selected
@@ -48,7 +49,7 @@ PropertiesPanel.prototype.init = function() {
   // Create a persistent mxWindow that cannot be closed.
   // Initial position is top-right; the user can move it freely.
   var win = new mxWindow(
-    'Shape Properties v' + PLUGIN_VERSION,
+    'Architect toolset v' + PLUGIN_VERSION,
     container,
     /* x */ Math.max(10, (window.innerWidth || document.body.clientWidth) - 290),
     /* y */ 8,
