@@ -1,35 +1,70 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.5';
+var PLUGIN_VERSION = '1.6';
 
 var ArchitectureReport = require('./ArchitectureReport');
+var TagHighlight       = require('./TagHighlight');
+
+// Inline style strings applied to the Tags input field in its two states.
+// Using full cssText replacements avoids partial-override issues in Electron.
+var _TAGS_INPUT_BASE = [
+  'width:100%',
+  'box-sizing:border-box',
+  'padding:5px 7px',
+  'border:1px solid #ccc',
+  'border-radius:3px',
+  'font-size:12px',
+].join(';');
+var _TAGS_INPUT_STYLE_ENABLED  = _TAGS_INPUT_BASE + ';background:#fff;';
+var _TAGS_INPUT_STYLE_DISABLED = _TAGS_INPUT_BASE + ';background:#f0f0f0;';
 
 /**
  * PropertiesPanel
  *
- * The "Architect toolset" persistent floating panel (mxWindow) that displays
- * and allows editing of the Name, Level, and Description properties of the
- * selected shape.
+ * The "Architect toolset" persistent floating panel (mxWindow).
+ * Organised as two tabs:
+ *   Properties — Name, Level, Description, Parent, Adopt Children,
+ *                Connected shapes, Also in..., Generate report button.
+ *   Tags       — Tags field for the selected cell; Highlight controls.
  *
- * States:
- *   empty        — no shape selected, or multiple shapes selected
- *   populated    — single non-ignored shape selected; fields are editable
- *   ignored      — selected shape has properties_ignored=true; shows Un-ignore button
+ * Panel states:
+ *   empty     — no selection, or multiple shapes selected
+ *   populated — single non-ignored shape; all fields editable
+ *   ignored   — selected shape has properties_ignored=true
+ *   edge      — single edge selected; Properties tab disabled, Tags tab active
  */
 function PropertiesPanel(ui, shapeProps) {
   this.ui = ui;
   this.shapeProps = shapeProps;
   this.currentCell = null;
-  this.fields = {};       // { prop_name: input, prop_level: input, prop_description: textarea }
+
+  // Properties tab elements
+  this.fields = {};
   this.parentDisplay = null;
   this.unignoreBtn = null;
   this.adoptBtn = null;
   this.reportBtn = null;
-  this.report = new ArchitectureReport(ui, shapeProps);
   this.connectionsSection = null;
   this.connectionsList = null;
   this.alsoInSection = null;
   this.alsoInList = null;
+
+  // Tags tab elements
+  this.tagsInput = null;
+  this.highlightDropdown = null;
+  this.activateBtn = null;
+  this.clearBtn = null;
+
+  // Shared sub-objects
+  this.report = new ArchitectureReport(ui, shapeProps);
+  this.tagHighlight = new TagHighlight(ui, shapeProps);
+
+  // Tab state
+  this._propertiesPane = null;
+  this._tagsPane = null;
+  this._tabBtns = null;
+  this._activeTab = 'properties';
+
   this.window = null;
 }
 
@@ -44,15 +79,26 @@ PropertiesPanel.prototype.init = function() {
     'box-sizing:border-box',
   ].join(';');
 
-  this._buildFields(container);
-  this._buildUnignoreButton(container);
-  this._buildAdoptButton(container);
-  this._buildConnectionsList(container);
-  this._buildAlsoIn(container);
-  this._buildReportButton(container);
+  this._buildTabBar(container);
 
-  // Create a persistent mxWindow that cannot be closed.
-  // Initial position is top-right; the user can move it freely.
+  // Properties pane — existing content unchanged.
+  var propsPane = document.createElement('div');
+  this._buildFields(propsPane);
+  this._buildUnignoreButton(propsPane);
+  this._buildAdoptButton(propsPane);
+  this._buildConnectionsList(propsPane);
+  this._buildAlsoIn(propsPane);
+  this._buildReportButton(propsPane);
+  container.appendChild(propsPane);
+  this._propertiesPane = propsPane;
+
+  // Tags pane — hidden until the Tags tab is clicked.
+  var tagsPane = document.createElement('div');
+  tagsPane.style.display = 'none';
+  this._buildTagsPane(tagsPane);
+  container.appendChild(tagsPane);
+  this._tagsPane = tagsPane;
+
   var win = new mxWindow(
     'Architect toolset v' + PLUGIN_VERSION,
     container,
@@ -69,8 +115,237 @@ PropertiesPanel.prototype.init = function() {
   win.setVisible(true);
 
   this.window = win;
+  this._switchTab('properties');
   this.setEmpty();
 };
+
+// ---------------------------------------------------------------------------
+// Tab bar
+// ---------------------------------------------------------------------------
+
+PropertiesPanel.prototype._buildTabBar = function(container) {
+  var self = this;
+
+  var bar = document.createElement('div');
+  bar.style.cssText = [
+    'display:flex',
+    'border-bottom:2px solid #ddd',
+    'margin-bottom:10px',
+  ].join(';');
+
+  function makeTabBtn(label, name) {
+    var btn = document.createElement('div');
+    btn.textContent = label;
+    btn.style.cssText = [
+      'padding:5px 12px',
+      'cursor:pointer',
+      'font-size:12px',
+      'font-weight:bold',
+      'color:#888',
+      'border-bottom:2px solid transparent',
+      'margin-bottom:-2px',
+      'user-select:none',
+    ].join(';');
+    btn.addEventListener('click', function() { self._switchTab(name); });
+    bar.appendChild(btn);
+    return btn;
+  }
+
+  this._tabBtns = {
+    properties: makeTabBtn('Properties', 'properties'),
+    tags:       makeTabBtn('Tags',       'tags'),
+  };
+
+  container.appendChild(bar);
+};
+
+PropertiesPanel.prototype._switchTab = function(name) {
+  var self = this;
+  this._activeTab = name;
+  var isProps = (name === 'properties');
+
+  if (this._propertiesPane) this._propertiesPane.style.display = isProps ? '' : 'none';
+  if (this._tagsPane)       this._tagsPane.style.display       = isProps ? 'none' : '';
+
+  if (this._tabBtns) {
+    Object.keys(this._tabBtns).forEach(function(k) {
+      var btn = self._tabBtns[k];
+      var active = (k === name);
+      btn.style.color       = active ? '#1976d2' : '#888';
+      btn.style.borderBottom = active ? '2px solid #1976d2' : '2px solid transparent';
+    });
+  }
+
+  if (name === 'tags') {
+    this._refreshHighlightDropdown();
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Tags pane
+// ---------------------------------------------------------------------------
+
+PropertiesPanel.prototype._buildTagsPane = function(pane) {
+  var self = this;
+  var sp   = this.shapeProps;
+
+  // Tags label + hint
+  var tagsLabel = document.createElement('label');
+  tagsLabel.textContent = 'Tags';
+  tagsLabel.style.cssText = 'display:block;font-weight:bold;margin-bottom:2px;color:#444;font-size:12px;';
+  pane.appendChild(tagsLabel);
+
+  var tagsHint = document.createElement('div');
+  tagsHint.textContent = 'Comma-separated e.g. team-a, security';
+  tagsHint.style.cssText = 'font-size:10px;color:#999;margin-bottom:4px;';
+  pane.appendChild(tagsHint);
+
+  var tagsInput = document.createElement('input');
+  tagsInput.type = 'text';
+  tagsInput.placeholder = 'e.g. team-a, security, core';
+  tagsInput.style.cssText = _TAGS_INPUT_STYLE_DISABLED;
+  tagsInput.setAttribute('disabled', '');
+
+  tagsInput.addEventListener('blur', function() {
+    if (self.currentCell && !tagsInput.hasAttribute('disabled')) {
+      var tags = tagsInput.value
+        .split(',')
+        .map(function(t) { return t.trim(); })
+        .filter(Boolean);
+      sp.setTags(self.ui.editor.graph, self.currentCell, tags);
+      self._refreshHighlightDropdown();
+    }
+  });
+
+  pane.appendChild(tagsInput);
+  this.tagsInput = tagsInput;
+
+  // Highlight section
+  var hlSection = document.createElement('div');
+  hlSection.style.cssText = 'margin-top:14px;border-top:1px solid #ddd;padding-top:10px;';
+
+  var hlHeading = document.createElement('div');
+  hlHeading.textContent = 'Highlight';
+  hlHeading.style.cssText = 'font-weight:bold;color:#444;margin-bottom:6px;font-size:12px;';
+  hlSection.appendChild(hlHeading);
+
+  var dropLabel = document.createElement('label');
+  dropLabel.textContent = 'Tag';
+  dropLabel.style.cssText = 'display:block;font-size:11px;color:#666;margin-bottom:2px;';
+  hlSection.appendChild(dropLabel);
+
+  var dropdown = document.createElement('select');
+  dropdown.style.cssText = [
+    'width:100%',
+    'box-sizing:border-box',
+    'padding:5px 7px',
+    'border:1px solid #ccc',
+    'border-radius:3px',
+    'font-size:12px',
+    'margin-bottom:8px',
+    'background:#fff',
+  ].join(';');
+  hlSection.appendChild(dropdown);
+  this.highlightDropdown = dropdown;
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:6px;';
+
+  var activateBtn = document.createElement('button');
+  activateBtn.textContent = 'Activate';
+  activateBtn.style.cssText = [
+    'flex:1',
+    'padding:6px 10px',
+    'border:none',
+    'border-radius:4px',
+    'background:#2e7d32',
+    'color:#fff',
+    'font-size:12px',
+    'font-weight:bold',
+    'cursor:pointer',
+  ].join(';');
+  activateBtn.addEventListener('click', function() {
+    var tag = dropdown.value;
+    if (!tag) {
+      mxUtils.alert('Select a tag to highlight.');
+      return;
+    }
+    self.tagHighlight.activate(self.ui.editor.graph, tag);
+  });
+
+  var clearBtn = document.createElement('button');
+  clearBtn.textContent = 'Clear';
+  clearBtn.style.cssText = [
+    'flex:1',
+    'padding:6px 10px',
+    'border:none',
+    'border-radius:4px',
+    'background:#757575',
+    'color:#fff',
+    'font-size:12px',
+    'font-weight:bold',
+    'cursor:pointer',
+  ].join(';');
+  clearBtn.addEventListener('click', function() {
+    self.tagHighlight.clear(self.ui.editor.graph);
+  });
+
+  btnRow.appendChild(activateBtn);
+  btnRow.appendChild(clearBtn);
+  hlSection.appendChild(btnRow);
+  pane.appendChild(hlSection);
+
+  this.activateBtn = activateBtn;
+  this.clearBtn    = clearBtn;
+};
+
+PropertiesPanel.prototype._refreshHighlightDropdown = function() {
+  var dropdown = this.highlightDropdown;
+  if (!dropdown) return;
+
+  var graph = this.ui.editor.graph;
+  var tags  = this.tagHighlight.collectAllTags(graph);
+
+  while (dropdown.firstChild) dropdown.removeChild(dropdown.firstChild);
+
+  var placeholder = document.createElement('option');
+  placeholder.value = '';
+
+  if (tags.length === 0) {
+    placeholder.textContent = '(no tags defined)';
+    placeholder.disabled = true;
+  } else {
+    placeholder.textContent = '— select tag —';
+  }
+  dropdown.appendChild(placeholder);
+
+  tags.forEach(function(tag) {
+    var opt = document.createElement('option');
+    opt.value = tag;
+    opt.textContent = tag;
+    dropdown.appendChild(opt);
+  });
+};
+
+PropertiesPanel.prototype._updateTagsField = function(cell) {
+  if (!this.tagsInput) return;
+
+  if (cell) {
+    var tags = [];
+    try { tags = this.shapeProps.getTags(cell); } catch (e) {}
+    this.tagsInput.value = tags.join(', ');
+    this.tagsInput.removeAttribute('disabled');
+    this.tagsInput.style.cssText = _TAGS_INPUT_STYLE_ENABLED;
+  } else {
+    this.tagsInput.value = '';
+    this.tagsInput.setAttribute('disabled', '');
+    this.tagsInput.style.cssText = _TAGS_INPUT_STYLE_DISABLED;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Properties pane — existing build methods (container arg now receives propsPane)
+// ---------------------------------------------------------------------------
 
 PropertiesPanel.prototype._buildFields = function(container) {
   var self = this;
@@ -134,7 +409,6 @@ PropertiesPanel.prototype._buildFields = function(container) {
     if (def.type === 'select') {
       input = document.createElement('select');
       input.style.cssText = inputStyle;
-      // Blank placeholder option
       var placeholder = document.createElement('option');
       placeholder.value = '';
       placeholder.textContent = '— select —';
@@ -145,7 +419,6 @@ PropertiesPanel.prototype._buildFields = function(container) {
         opt.textContent = lvl;
         input.appendChild(opt);
       });
-      // Save on change, then try to re-parent based on the new level.
       input.addEventListener('change', function() {
         if (self.currentCell && !input.disabled) {
           var graph = self.ui.editor.graph;
@@ -166,12 +439,7 @@ PropertiesPanel.prototype._buildFields = function(container) {
       input.style.resize = 'vertical';
       input.addEventListener('blur', function() {
         if (self.currentCell && !input.disabled) {
-          sp.setProperty(
-            self.ui.editor.graph,
-            self.currentCell,
-            def.key,
-            input.value
-          );
+          sp.setProperty(self.ui.editor.graph, self.currentCell, def.key, input.value);
         }
       });
     } else {
@@ -180,12 +448,7 @@ PropertiesPanel.prototype._buildFields = function(container) {
       input.style.cssText = inputStyle;
       input.addEventListener('blur', function() {
         if (self.currentCell && !input.disabled) {
-          sp.setProperty(
-            self.ui.editor.graph,
-            self.currentCell,
-            def.key,
-            input.value
-          );
+          sp.setProperty(self.ui.editor.graph, self.currentCell, def.key, input.value);
         }
       });
     }
@@ -223,7 +486,6 @@ PropertiesPanel.prototype._buildUnignoreButton = function(container) {
   btn.addEventListener('click', function() {
     if (self.currentCell) {
       sp.removeProperty(self.ui.editor.graph, self.currentCell, sp.PROP_IGNORED);
-      // Re-trigger the selection handler by firing a synthetic CHANGE event.
       var selectionModel = self.ui.editor.graph.getSelectionModel();
       selectionModel.fireEvent(new mxEventObject(mxEvent.CHANGE));
     }
@@ -356,89 +618,6 @@ PropertiesPanel.prototype._updateConnections = function(cell) {
   this.connectionsSection.style.display = 'block';
 };
 
-/**
- * Populate panel with the cell's current property values (editable state).
- */
-PropertiesPanel.prototype.populate = function(cell) {
-  var sp = this.shapeProps;
-  var graph = this.ui.editor.graph;
-  this.currentCell = cell;
-
-  var level = sp.getProperty(cell, sp.PROP_LEVEL) || '';
-  this.fields[sp.PROP_NAME].value        = sp.getProperty(cell, sp.PROP_NAME)        || '';
-  this.fields[sp.PROP_LEVEL].value       = level;
-  this.fields[sp.PROP_DESCRIPTION].value = sp.getProperty(cell, sp.PROP_DESCRIPTION) || '';
-
-  this._updateParentDisplay(cell, graph);
-  this._setFieldsDisabled(false);
-  this.unignoreBtn.style.display = 'none';
-  this.reportBtn.style.display = 'none';
-  this._updateAdoptButton(sp.getChildLevel(level));
-  this._updateConnections(cell);
-  this._updateAlsoIn(cell);
-};
-
-PropertiesPanel.prototype._updateParentDisplay = function(cell, graph) {
-  var sp = this.shapeProps;
-  var parentCell = graph.model.getParent(cell);
-  if (parentCell && parentCell !== graph.getDefaultParent()) {
-    var name  = sp.getProperty(parentCell, sp.PROP_NAME) || graph.getLabel(parentCell) || '(unnamed)';
-    var lvl   = sp.getProperty(parentCell, sp.PROP_LEVEL);
-    this.parentDisplay.textContent = lvl ? name + ' (' + lvl + ')' : name;
-    this.parentDisplay.style.color = '#333';
-  } else {
-    this.parentDisplay.textContent = '— no parent —';
-    this.parentDisplay.style.color = '#aaa';
-  }
-};
-
-/**
- * Show the ignored state — fields empty and disabled, Un-ignore button visible.
- */
-PropertiesPanel.prototype.setIgnored = function(cell) {
-  this.currentCell = cell;
-  this._clearFields();
-  this._setFieldsDisabled(true);
-  this.parentDisplay.textContent = '—';
-  this.parentDisplay.style.color = '#aaa';
-  this.unignoreBtn.style.display = 'block';
-  this.adoptBtn.style.display = 'none';
-  this.reportBtn.style.display = 'none';
-  this.connectionsSection.style.display = 'none';
-  this.alsoInSection.style.display = 'none';
-};
-
-/**
- * Show the empty state — no selection or multi-selection.
- */
-PropertiesPanel.prototype.setEmpty = function() {
-  this.currentCell = null;
-  this._clearFields();
-  this._setFieldsDisabled(true);
-  this.parentDisplay.textContent = '—';
-  this.parentDisplay.style.color = '#aaa';
-  this.unignoreBtn.style.display = 'none';
-  this.adoptBtn.style.display = 'none';
-  this.reportBtn.style.display = 'block';
-  this.connectionsSection.style.display = 'none';
-  this.alsoInSection.style.display = 'none';
-};
-
-PropertiesPanel.prototype._setFieldsDisabled = function(disabled) {
-  var fields = this.fields;
-  Object.keys(fields).forEach(function(key) {
-    fields[key].disabled = disabled;
-    fields[key].style.background = disabled ? '#f0f0f0' : '#fff';
-  });
-};
-
-PropertiesPanel.prototype._clearFields = function() {
-  var fields = this.fields;
-  Object.keys(fields).forEach(function(key) {
-    fields[key].value = '';
-  });
-};
-
 PropertiesPanel.prototype._buildAlsoIn = function(container) {
   var section = document.createElement('div');
   section.style.cssText = 'margin-top:10px;border-top:1px solid #ddd;padding-top:8px;display:none;';
@@ -507,7 +686,7 @@ PropertiesPanel.prototype._updateAlsoIn = function(cell) {
 
     item.addEventListener('click', function() {
       var targetCell = match.cell;
-      ui.selectPage(match.page, true);      // true = skip undo history
+      ui.selectPage(match.page, true);
       setTimeout(function() {
         var graph = ui.editor.graph;
         graph.setSelectionCell(targetCell);
@@ -549,10 +728,125 @@ PropertiesPanel.prototype._buildReportButton = function(container) {
 };
 
 // ---------------------------------------------------------------------------
+// Panel states
+// ---------------------------------------------------------------------------
+
+/**
+ * Populated state — single non-ignored shape selected.
+ */
+PropertiesPanel.prototype.populate = function(cell) {
+  var sp = this.shapeProps;
+  var graph = this.ui.editor.graph;
+  this.currentCell = cell;
+
+  var level = sp.getProperty(cell, sp.PROP_LEVEL) || '';
+  this.fields[sp.PROP_NAME].value        = sp.getProperty(cell, sp.PROP_NAME)        || '';
+  this.fields[sp.PROP_LEVEL].value       = level;
+  this.fields[sp.PROP_DESCRIPTION].value = sp.getProperty(cell, sp.PROP_DESCRIPTION) || '';
+
+  this._updateParentDisplay(cell, graph);
+  this._setFieldsDisabled(false);
+  this.unignoreBtn.style.display = 'none';
+  this.reportBtn.style.display   = 'none';
+  this._updateAdoptButton(sp.getChildLevel(level));
+  this._updateConnections(cell);
+  this._updateAlsoIn(cell);
+  this._updateTagsField(cell);
+  this._switchTab('properties');
+};
+
+PropertiesPanel.prototype._updateParentDisplay = function(cell, graph) {
+  var sp = this.shapeProps;
+  var parentCell = graph.model.getParent(cell);
+  if (parentCell && parentCell !== graph.getDefaultParent()) {
+    var name = sp.getProperty(parentCell, sp.PROP_NAME) || graph.getLabel(parentCell) || '(unnamed)';
+    var lvl  = sp.getProperty(parentCell, sp.PROP_LEVEL);
+    this.parentDisplay.textContent = lvl ? name + ' (' + lvl + ')' : name;
+    this.parentDisplay.style.color = '#333';
+  } else {
+    this.parentDisplay.textContent = '— no parent —';
+    this.parentDisplay.style.color = '#aaa';
+  }
+};
+
+/**
+ * Ignored state — selected shape has properties_ignored=true.
+ * Properties tab shows only the Un-ignore button; Tags tab is still editable.
+ */
+PropertiesPanel.prototype.setIgnored = function(cell) {
+  this.currentCell = cell;
+  this._clearFields();
+  this._setFieldsDisabled(true);
+  this.parentDisplay.textContent = '—';
+  this.parentDisplay.style.color = '#aaa';
+  this.unignoreBtn.style.display = 'block';
+  this.adoptBtn.style.display    = 'none';
+  this.reportBtn.style.display   = 'none';
+  this.connectionsSection.style.display = 'none';
+  this.alsoInSection.style.display      = 'none';
+  this._updateTagsField(cell);
+};
+
+/**
+ * Empty state — no selection or multi-selection.
+ */
+PropertiesPanel.prototype.setEmpty = function() {
+  this.currentCell = null;
+  this._clearFields();
+  this._setFieldsDisabled(true);
+  this.parentDisplay.textContent = '—';
+  this.parentDisplay.style.color = '#aaa';
+  this.unignoreBtn.style.display = 'none';
+  this.adoptBtn.style.display    = 'none';
+  this.reportBtn.style.display   = 'block';
+  this.connectionsSection.style.display = 'none';
+  this.alsoInSection.style.display      = 'none';
+  this._updateTagsField(null);
+  this._switchTab('properties');
+};
+
+/**
+ * Edge state — single connector selected.
+ * Properties tab is all-disabled; Tags tab becomes active and editable.
+ */
+PropertiesPanel.prototype.setEdge = function(cell) {
+  this.currentCell = cell;
+  this._clearFields();
+  this._setFieldsDisabled(true);
+  this.parentDisplay.textContent = '—';
+  this.parentDisplay.style.color = '#aaa';
+  this.unignoreBtn.style.display = 'none';
+  this.adoptBtn.style.display    = 'none';
+  this.reportBtn.style.display   = 'none';
+  this.connectionsSection.style.display = 'none';
+  this.alsoInSection.style.display      = 'none';
+  this._updateTagsField(cell);
+  this._switchTab('tags');
+};
+
+// ---------------------------------------------------------------------------
+// Field helpers
+// ---------------------------------------------------------------------------
+
+PropertiesPanel.prototype._setFieldsDisabled = function(disabled) {
+  var fields = this.fields;
+  Object.keys(fields).forEach(function(key) {
+    fields[key].disabled = disabled;
+    fields[key].style.background = disabled ? '#f0f0f0' : '#fff';
+  });
+};
+
+PropertiesPanel.prototype._clearFields = function() {
+  var fields = this.fields;
+  Object.keys(fields).forEach(function(key) {
+    fields[key].value = '';
+  });
+};
+
+// ---------------------------------------------------------------------------
 // Module-level helpers
 // ---------------------------------------------------------------------------
 
-// Returns the first matching cell in a page root tree, or null.
 function _findCellInPage(root, name, level, sp) {
   if (!root) return null;
   var children = root.children;
@@ -579,15 +873,6 @@ function _findCellInTree(cell, name, level, sp) {
     }
   }
   return null;
-}
-
-// _pageContainsMatch kept as a thin wrapper for any future use.
-function _pageContainsMatch(root, name, level, sp) {
-  return _findCellInPage(root, name, level, sp) !== null;
-}
-
-function _cellContainsMatch(cell, name, level, sp) {
-  return _findCellInTree(cell, name, level, sp) !== null;
 }
 
 module.exports = PropertiesPanel;

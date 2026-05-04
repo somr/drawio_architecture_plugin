@@ -1,11 +1,15 @@
-# DrawIO Architecture Properties Plugin
+# DrawIO Architecture Properties Plugin (v1.6)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 
 ## Features
 
 ### Properties panel
-A persistent floating panel titled **Architect toolset** always visible while the plugin is loaded. For each selected shape it shows:
+A persistent floating panel titled **Architect toolset** always visible while the plugin is loaded.
+The panel is organised into two tabs: **Properties** and **Tags**.
+
+#### Properties tab
+For each selected shape it shows:
 
 - **Parent** — the direct container shape (read-only), or *— no parent —* if the shape sits at the diagram root
 - **Name** — editable text field
@@ -42,6 +46,10 @@ The Markdown document structure:
 - H1 page title with embedded PNG
 - H2–H6 headings per shape level (Organisation → Node), with description and connections
 - An **Uncategorised** section for shapes not contained within any Organisation
+
+#### Tags tab
+- **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur. If a connector is selected, the panel auto-switches to this tab (connectors don't have Name/Level/Description).
+- **Highlight section** — select any tag from the dropdown and click **Activate** to visually emphasise all shapes and connectors carrying that tag and de-emphasise everything else. Click **Clear** to restore original styles. The highlight is applied as an undoable operation.
 
 ### Missing properties prompt
 When a shape with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes can also be marked as *Ignored* to suppress the prompt permanently.
@@ -93,9 +101,11 @@ After the first registration, rebuilding and restarting DrawIO is all that is ne
 ```
 src/
   index.js              Plugin entry point; selection change listener
-  ShapeProperties.js    Property read/write, level hierarchy, container adoption
-  PropertiesPanel.js    Persistent mxWindow panel UI
+  ShapeProperties.js    Property read/write, level hierarchy, container adoption, tag helpers
+  PropertiesPanel.js    Persistent mxWindow panel UI (Properties + Tags tabs)
   PropertiesDialog.js   Missing-properties modal dialog
+  TagHighlight.js       Tag highlight engine — activate/clear/style merge
+  ArchitectureReport.js Architecture report generator (PNG + Markdown)
 docs/
   specs.md              Full feature specification
 webpack.config.js       Build configuration

@@ -1,6 +1,6 @@
 # DrawIO Properties Plugin — Application Specification
 
-Version: 1.5
+Version: 1.6
 Status: Approved
 
 ---
@@ -332,7 +332,109 @@ All errors are surfaced to the user via a `mxUtils.alert()` dialog. No operation
 
 ---
 
-## 13. Out of Scope
+## 13. Tags
+
+### 13.1 Property storage
+
+Shapes and connectors (edges) may each carry an optional `prop_tags` property — a
+comma-separated string of arbitrary tag names (e.g. `"team-a,security,core"`). Tags are
+case-sensitive and trimmed of leading/trailing whitespace when read.
+
+### 13.2 Tags tab
+
+The panel is split into two tabs:
+
+| Tab | Content |
+|-----|---------|
+| **Properties** | All existing fields (Parent, Name, Level, Description, Adopt Children, Connected shapes, Also in..., Generate report button). Unchanged from v1.5. |
+| **Tags** | Tags field for the selected cell; Highlight section (see section 14). |
+
+### 13.3 Tags field
+
+The Tags field is a single-line text input in the Tags tab showing a comma-separated list of
+the selected cell's tags.
+
+| State | Tags field |
+|-------|-----------|
+| No selection | Disabled and blank |
+| Single shape selected (normal or ignored) | Enabled and editable |
+| Single edge selected | Enabled and editable |
+| Multiple shapes selected | Disabled and blank |
+
+The field saves on blur via `ShapeProperties.setTags()`. An empty field removes the `prop_tags`
+attribute from the cell.
+
+### 13.4 Edge selection
+
+When a single connector is selected, the Properties tab fields are all disabled (edges do not
+have Name / Level / Description), and the panel auto-switches to the Tags tab. Selecting a shape
+auto-switches back to the Properties tab.
+
+---
+
+## 14. Tag Highlight
+
+### 14.1 Overview
+
+The Highlight section is always visible in the Tags tab. It lets the user select a tag from a
+dropdown and visually emphasise all shapes and connectors that carry that tag, de-emphasising
+everything else.
+
+### 14.2 Highlight dropdown
+
+The dropdown lists all unique tag values found on any vertex or edge in the current page,
+sorted alphabetically. If no tags are defined, the dropdown shows `(no tags defined)` with
+the placeholder option disabled. The dropdown is refreshed whenever the Tags tab becomes active
+and whenever tags are saved on a cell.
+
+### 14.3 Activate
+
+Clicking **Activate** with a tag selected:
+
+1. Stores the current `style` attribute of every vertex and edge in the graph model.
+2. Applies style overrides in a single undoable transaction:
+   - Shapes **with** the tag → highlighted style overrides.
+   - Shapes **without** the tag (including shapes with no tags at all) → de-emphasised style overrides.
+   - Connectors follow the same rule, using separate edge style overrides.
+3. Style overrides are **merged** on top of the cell's existing style — only specific keys
+   (stroke colour, stroke width, fill colour, font colour, opacity) are changed. All other style
+   attributes (shape type, edge routing, text alignment, etc.) are preserved.
+
+The operation is undoable (Ctrl+Z restores original styles as one step).
+
+### 14.4 Style constants
+
+Style override keys and their placeholder values (defined in `src/TagHighlight.js`; change there
+to adjust the visual appearance):
+
+| Constant | Applied to | Keys overridden |
+|---|---|---|
+| `HIGHLIGHT_VERTEX` | Highlighted shapes | `strokeColor`, `strokeWidth`, `fillColor` |
+| `DEEMPH_VERTEX` | De-emphasised shapes | `strokeColor`, `strokeWidth`, `fillColor`, `fontColor`, `opacity` |
+| `HIGHLIGHT_EDGE` | Highlighted connectors | `strokeColor`, `strokeWidth` |
+| `DEEMPH_EDGE` | De-emphasised connectors | `strokeColor`, `strokeWidth`, `opacity` |
+
+### 14.5 Clear
+
+Clicking **Clear** restores all original styles from the stored snapshot in one undoable
+transaction and deactivates the highlight.
+
+### 14.6 Persistence
+
+Highlight is applied via `graph.model.setStyle()` and therefore marks the file as having
+unsaved changes. The user should click **Clear** before saving to avoid saving highlight styles
+to the `.drawio` file. When a new file is opened (`fileLoaded`), the plugin resets its
+internal highlight state automatically without touching the model.
+
+### 14.7 Scope
+
+The highlight operates on the current page only. Switching pages or opening a new file resets
+the internal state. There is no multi-tag simultaneous highlight; only one tag can be active
+at a time.
+
+---
+
+## 15. Out of Scope
 
 - Bulk editing across multiple shapes.
 - Custom property field definitions (Name/Level/Description are fixed).

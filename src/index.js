@@ -72,7 +72,7 @@ Draw.loadPlugin(function(ui) {
     var cell = cells[0];
 
     if (graph.model.isEdge(cell)) {
-      panel.setEmpty();
+      panel.setEdge(cell);
       return;
     }
 
@@ -95,9 +95,10 @@ Draw.loadPlugin(function(ui) {
     }
   });
 
-  // Reset the panel when a new file is opened (e.g. user opens another diagram).
+  // Reset panel and highlight state when a new file is opened.
   ui.editor.addListener('fileLoaded', function() {
     console.log('[PropertiesPlugin] fileLoaded event — resetting panel');
+    panel.tagHighlight.reset();
     panel.setEmpty();
   });
 

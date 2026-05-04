@@ -5,6 +5,7 @@ var PROP_NAME        = 'prop_name';
 var PROP_LEVEL       = 'prop_level';
 var PROP_DESCRIPTION = 'prop_description';
 var PROP_IGNORED     = 'properties_ignored';
+var PROP_TAGS        = 'prop_tags';
 
 // Allowed values for the Level property.
 var VALID_LEVELS = [
@@ -112,6 +113,21 @@ function getMissingProperties(cell) {
  */
 function isIgnored(cell) {
   return getProperty(cell, PROP_IGNORED) === 'true';
+}
+
+/**
+ * Returns the list of tags on a cell as a trimmed, non-empty string array.
+ */
+function getTags(cell) {
+  var raw = getProperty(cell, PROP_TAGS) || '';
+  return raw.split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+}
+
+/**
+ * Stores an array of tag strings on a cell as a comma-separated property.
+ */
+function setTags(graph, cell, tagsArray) {
+  setProperty(graph, cell, PROP_TAGS, tagsArray.join(','));
 }
 
 // ---------------------------------------------------------------------------
@@ -365,6 +381,7 @@ module.exports = {
   PROP_LEVEL,
   PROP_DESCRIPTION,
   PROP_IGNORED,
+  PROP_TAGS,
   VALID_LEVELS,
   CHILD_LEVEL,
   PARENT_LEVEL,
@@ -384,4 +401,6 @@ module.exports = {
   setProperties,
   getMissingProperties,
   isIgnored,
+  getTags,
+  setTags,
 };
