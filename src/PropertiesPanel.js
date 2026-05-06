@@ -71,15 +71,25 @@ function PropertiesPanel(ui, shapeProps) {
 PropertiesPanel.prototype.init = function() {
   var container = document.createElement('div');
   container.style.cssText = [
-    'padding:12px',
     'font-family:Arial,sans-serif',
     'font-size:12px',
     'background:#fafafa',
     'height:100%',
     'box-sizing:border-box',
+    'display:flex',
+    'flex-direction:column',
   ].join(';');
 
-  this._buildTabBar(container);
+  // Scrollable content area — takes all available height above the footer.
+  var contentArea = document.createElement('div');
+  contentArea.style.cssText = [
+    'flex:1',
+    'min-height:0',
+    'overflow-y:auto',
+    'padding:12px',
+  ].join(';');
+
+  this._buildTabBar(contentArea);
 
   // Properties pane — existing content unchanged.
   var propsPane = document.createElement('div');
@@ -89,23 +99,39 @@ PropertiesPanel.prototype.init = function() {
   this._buildConnectionsList(propsPane);
   this._buildAlsoIn(propsPane);
   this._buildReportButton(propsPane);
-  container.appendChild(propsPane);
+  contentArea.appendChild(propsPane);
   this._propertiesPane = propsPane;
 
   // Tags pane — hidden until the Tags tab is clicked.
   var tagsPane = document.createElement('div');
   tagsPane.style.display = 'none';
   this._buildTagsPane(tagsPane);
-  container.appendChild(tagsPane);
+  contentArea.appendChild(tagsPane);
   this._tagsPane = tagsPane;
 
+  container.appendChild(contentArea);
+
+  // Version footer — always visible at the bottom.
+  var footer = document.createElement('div');
+  footer.textContent = 'Architect toolset v' + PLUGIN_VERSION;
+  footer.style.cssText = [
+    'padding:4px 12px',
+    'font-size:10px',
+    'color:#bbb',
+    'border-top:1px solid #e8e8e8',
+    'background:#f5f5f5',
+    'text-align:center',
+    'flex-shrink:0',
+  ].join(';');
+  container.appendChild(footer);
+
   var win = new mxWindow(
-    'Architect toolset v' + PLUGIN_VERSION,
+    'Architect toolset',
     container,
     /* x */ Math.max(10, (window.innerWidth || document.body.clientWidth) - 290),
     /* y */ 8,
     /* w */ 270,
-    /* h */ 480,
+    /* h */ 580,
     /* minimizable */ true,
     /* movable     */ true
   );

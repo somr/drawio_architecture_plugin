@@ -117,9 +117,9 @@ function _exportPng(ui, path, callback) {
           callback(String(e));
         }
       },
-      null,   // format  — PNG by default
-      null,   // imageCache
-      null,   // background — use page setting
+      null,        // format — PNG by default
+      null,        // imageCache
+      '#ffffff',   // background — white (page setting is often transparent)
       function(err) { callback(String(err)); }   // exportToCanvas error callback
     );
   } catch (e) {
