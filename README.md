@@ -124,3 +124,9 @@ webpack.config.js       Build configuration
 ## Documentation
 
 Full requirements and behaviour details are in [`docs/specs.md`](docs/specs.md).
+
+---
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the full version history.
