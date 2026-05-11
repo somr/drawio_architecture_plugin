@@ -20,14 +20,23 @@ PropertiesDialog.prototype.show = function(cell, onSave, onIgnore) {
   var sp = this.shapeProps;
   var graph = this.ui.editor.graph;
 
-  var missing = sp.getMissingProperties(cell);
+  var isEdge = graph.model.isEdge(cell);
+
+  var missing = isEdge
+    ? sp.getMissingConnectorProperties(cell)
+    : sp.getMissingProperties(cell);
 
   // Build field map: propKey -> { label, input }
-  var fieldDefs = [
-    { key: sp.PROP_NAME,        label: 'Name',        type: 'text'     },
-    { key: sp.PROP_LEVEL,       label: 'Level',       type: 'select'   },
-    { key: sp.PROP_DESCRIPTION, label: 'Description', type: 'textarea' },
-  ];
+  var fieldDefs = isEdge
+    ? [
+        { key: sp.PROP_NAME,        label: 'Name',        type: 'text'     },
+        { key: sp.PROP_DESCRIPTION, label: 'Description', type: 'textarea' },
+      ]
+    : [
+        { key: sp.PROP_NAME,        label: 'Name',        type: 'text'     },
+        { key: sp.PROP_LEVEL,       label: 'Level',       type: 'select'   },
+        { key: sp.PROP_DESCRIPTION, label: 'Description', type: 'textarea' },
+      ];
 
   // ---------------------------------------------------------------------------
   // Overlay
@@ -62,12 +71,14 @@ PropertiesDialog.prototype.show = function(cell, onSave, onIgnore) {
   ].join(';');
 
   var title = document.createElement('h3');
-  title.textContent = 'Shape Properties Required';
+  title.textContent = isEdge ? 'Connector Properties Required' : 'Shape Properties Required';
   title.style.cssText = 'margin:0 0 12px;font-size:15px;color:#333;';
   dialog.appendChild(title);
 
   var subtitle = document.createElement('p');
-  subtitle.textContent = 'This shape is missing required properties. Please fill them in.';
+  subtitle.textContent = isEdge
+    ? 'This connector is missing required properties. Please fill them in.'
+    : 'This shape is missing required properties. Please fill them in.';
   subtitle.style.cssText = 'margin:0 0 14px;color:#666;font-size:12px;';
   dialog.appendChild(subtitle);
 

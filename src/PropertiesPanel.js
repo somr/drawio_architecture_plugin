@@ -1,6 +1,6 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.6';
+var PLUGIN_VERSION = '1.7';
 
 var ArchitectureReport = require('./ArchitectureReport');
 var TagHighlight       = require('./TagHighlight');
@@ -41,6 +41,8 @@ function PropertiesPanel(ui, shapeProps) {
   // Properties tab elements
   this.fields = {};
   this.parentDisplay = null;
+  this.parentRow = null;
+  this.levelRow = null;
   this.unignoreBtn = null;
   this.adoptBtn = null;
   this.reportBtn = null;
@@ -48,6 +50,8 @@ function PropertiesPanel(ui, shapeProps) {
   this.connectionsList = null;
   this.alsoInSection = null;
   this.alsoInList = null;
+  this.connectorEndpointsSection = null;
+  this.connectorEndpointsList = null;
 
   // Tags tab elements
   this.tagsInput = null;
@@ -98,6 +102,7 @@ PropertiesPanel.prototype.init = function() {
   this._buildAdoptButton(propsPane);
   this._buildConnectionsList(propsPane);
   this._buildAlsoIn(propsPane);
+  this._buildConnectorEndpoints(propsPane);
   this._buildReportButton(propsPane);
   contentArea.appendChild(propsPane);
   this._propertiesPane = propsPane;
@@ -412,6 +417,7 @@ PropertiesPanel.prototype._buildFields = function(container) {
   parentRow.appendChild(parentDisplay);
   container.appendChild(parentRow);
   self.parentDisplay = parentDisplay;
+  self.parentRow = parentRow;
 
   var inputStyle = [
     'width:100%',
@@ -486,6 +492,7 @@ PropertiesPanel.prototype._buildFields = function(container) {
     container.appendChild(row);
 
     self.fields[def.key] = input;
+    if (def.key === sp.PROP_LEVEL) self.levelRow = row;
   });
 };
 
@@ -726,6 +733,69 @@ PropertiesPanel.prototype._updateAlsoIn = function(cell) {
   this.alsoInSection.style.display = 'block';
 };
 
+PropertiesPanel.prototype._buildConnectorEndpoints = function(container) {
+  var section = document.createElement('div');
+  section.style.cssText = 'margin-top:10px;border-top:1px solid #ddd;padding-top:8px;display:none;';
+
+  var heading = document.createElement('div');
+  heading.textContent = 'Connects';
+  heading.style.cssText = 'font-weight:bold;color:#444;margin-bottom:6px;font-size:12px;';
+  section.appendChild(heading);
+
+  var endpointsDiv = document.createElement('div');
+  section.appendChild(endpointsDiv);
+  container.appendChild(section);
+
+  this.connectorEndpointsSection = section;
+  this.connectorEndpointsList    = endpointsDiv;
+};
+
+PropertiesPanel.prototype._updateConnectorEndpoints = function(cell) {
+  var self = this;
+  var sp    = this.shapeProps;
+  var graph = this.ui.editor.graph;
+  var div   = this.connectorEndpointsList;
+
+  while (div.firstChild) div.removeChild(div.firstChild);
+
+  var sourceCell = graph.model.getTerminal(cell, true);
+  var targetCell = graph.model.getTerminal(cell, false);
+
+  function getDisplayName(c) {
+    if (!c || !c.vertex) return 'anonymous';
+    if (sp.isIgnored(c))  return 'anonymous';
+    var name = sp.getProperty(c, sp.PROP_NAME);
+    return (name && name.trim()) ? name : 'anonymous';
+  }
+
+  function makeLink(displayName, shapeCell) {
+    var span = document.createElement('span');
+    span.textContent = displayName;
+    if (displayName === 'anonymous') {
+      span.style.cssText = 'font-size:12px;color:#999;font-style:italic;';
+    } else {
+      span.style.cssText = 'font-size:12px;color:#1976d2;cursor:pointer;text-decoration:underline;';
+      span.addEventListener('click', function() {
+        graph.setSelectionCell(shapeCell);
+        graph.scrollCellToVisible(shapeCell, true);
+      });
+    }
+    return span;
+  }
+
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0;';
+
+  var arrow = document.createElement('span');
+  arrow.textContent = '→';
+  arrow.style.cssText = 'font-size:16px;font-weight:bold;color:#1976d2;flex-shrink:0;';
+
+  row.appendChild(makeLink(getDisplayName(sourceCell), sourceCell));
+  row.appendChild(arrow);
+  row.appendChild(makeLink(getDisplayName(targetCell), targetCell));
+  div.appendChild(row);
+};
+
 PropertiesPanel.prototype._buildReportButton = function(container) {
   var self = this;
 
@@ -765,6 +835,10 @@ PropertiesPanel.prototype.populate = function(cell) {
   var graph = this.ui.editor.graph;
   this.currentCell = cell;
 
+  this.levelRow.style.display  = '';
+  this.parentRow.style.display = '';
+  this.connectorEndpointsSection.style.display = 'none';
+
   var level = sp.getProperty(cell, sp.PROP_LEVEL) || '';
   this.fields[sp.PROP_NAME].value        = sp.getProperty(cell, sp.PROP_NAME)        || '';
   this.fields[sp.PROP_LEVEL].value       = level;
@@ -803,13 +877,16 @@ PropertiesPanel.prototype.setIgnored = function(cell) {
   this.currentCell = cell;
   this._clearFields();
   this._setFieldsDisabled(true);
+  this.levelRow.style.display  = '';
+  this.parentRow.style.display = '';
   this.parentDisplay.textContent = '—';
   this.parentDisplay.style.color = '#aaa';
   this.unignoreBtn.style.display = 'block';
   this.adoptBtn.style.display    = 'none';
   this.reportBtn.style.display   = 'none';
-  this.connectionsSection.style.display = 'none';
-  this.alsoInSection.style.display      = 'none';
+  this.connectionsSection.style.display        = 'none';
+  this.alsoInSection.style.display             = 'none';
+  this.connectorEndpointsSection.style.display = 'none';
   this._updateTagsField(cell);
 };
 
@@ -820,34 +897,72 @@ PropertiesPanel.prototype.setEmpty = function() {
   this.currentCell = null;
   this._clearFields();
   this._setFieldsDisabled(true);
+  this.levelRow.style.display  = '';
+  this.parentRow.style.display = '';
   this.parentDisplay.textContent = '—';
   this.parentDisplay.style.color = '#aaa';
   this.unignoreBtn.style.display = 'none';
   this.adoptBtn.style.display    = 'none';
   this.reportBtn.style.display   = 'block';
-  this.connectionsSection.style.display = 'none';
-  this.alsoInSection.style.display      = 'none';
+  this.connectionsSection.style.display        = 'none';
+  this.alsoInSection.style.display             = 'none';
+  this.connectorEndpointsSection.style.display = 'none';
   this._updateTagsField(null);
   this._switchTab('properties');
 };
 
 /**
- * Edge state — single connector selected.
- * Properties tab is all-disabled; Tags tab becomes active and editable.
+ * Connector (edge) state — Name and Description editable, Level/Parent hidden.
+ * Shows the two connected shapes as clickable links.
  */
 PropertiesPanel.prototype.setEdge = function(cell) {
+  var sp = this.shapeProps;
   this.currentCell = cell;
-  this._clearFields();
-  this._setFieldsDisabled(true);
-  this.parentDisplay.textContent = '—';
-  this.parentDisplay.style.color = '#aaa';
+
+  this.levelRow.style.display  = 'none';
+  this.parentRow.style.display = 'none';
+
+  this.fields[sp.PROP_NAME].value        = sp.getProperty(cell, sp.PROP_NAME)        || '';
+  this.fields[sp.PROP_DESCRIPTION].value = sp.getProperty(cell, sp.PROP_DESCRIPTION) || '';
+  this.fields[sp.PROP_LEVEL].value       = '';
+
+  this._setFieldsDisabled(false);
+  this.fields[sp.PROP_LEVEL].disabled        = true;
+  this.fields[sp.PROP_LEVEL].style.background = '#f0f0f0';
+
   this.unignoreBtn.style.display = 'none';
   this.adoptBtn.style.display    = 'none';
   this.reportBtn.style.display   = 'none';
   this.connectionsSection.style.display = 'none';
   this.alsoInSection.style.display      = 'none';
+
+  this._updateConnectorEndpoints(cell);
+  this.connectorEndpointsSection.style.display = 'block';
+
   this._updateTagsField(cell);
-  this._switchTab('tags');
+  this._switchTab('properties');
+};
+
+/**
+ * Ignored connector state — all fields disabled, un-ignore button visible.
+ */
+PropertiesPanel.prototype.setConnectorIgnored = function(cell) {
+  this.currentCell = cell;
+  this._clearFields();
+  this._setFieldsDisabled(true);
+
+  this.levelRow.style.display  = 'none';
+  this.parentRow.style.display = 'none';
+
+  this.unignoreBtn.style.display = 'block';
+  this.adoptBtn.style.display    = 'none';
+  this.reportBtn.style.display   = 'none';
+  this.connectionsSection.style.display        = 'none';
+  this.alsoInSection.style.display             = 'none';
+  this.connectorEndpointsSection.style.display = 'none';
+
+  this._updateTagsField(cell);
+  this._switchTab('properties');
 };
 
 // ---------------------------------------------------------------------------

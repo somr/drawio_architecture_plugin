@@ -72,7 +72,20 @@ Draw.loadPlugin(function(ui) {
     var cell = cells[0];
 
     if (graph.model.isEdge(cell)) {
-      panel.setEdge(cell);
+      if (ShapeProperties.isIgnored(cell)) {
+        panel.setConnectorIgnored(cell);
+        return;
+      }
+      var missingConn = ShapeProperties.getMissingConnectorProperties(cell);
+      if (missingConn.length > 0) {
+        dialog.show(
+          cell,
+          function onSave()   { panel.setEdge(cell); },
+          function onIgnore() { panel.setConnectorIgnored(cell); }
+        );
+      } else {
+        panel.setEdge(cell);
+      }
       return;
     }
 

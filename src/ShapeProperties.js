@@ -108,6 +108,13 @@ function getMissingProperties(cell) {
   return missing;
 }
 
+function getMissingConnectorProperties(cell) {
+  return [PROP_NAME, PROP_DESCRIPTION].filter(function(key) {
+    var val = getProperty(cell, key);
+    return !val || !val.trim();
+  });
+}
+
 /**
  * Returns true if the cell has been marked as ignored.
  */
@@ -400,6 +407,7 @@ module.exports = {
   removeProperty,
   setProperties,
   getMissingProperties,
+  getMissingConnectorProperties,
   isIgnored,
   getTags,
   setTags,
