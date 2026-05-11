@@ -7,9 +7,43 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 ## [1.8] — 2026-05-11
 
 ### Changed
-- **Architecture export replaces Markdown report** — the export button (now labelled **Export architecture JSON**) produces a `.json` file instead of a `.md` file. The PNG export is retained. The JSON contains three top-level sections: `hierarchy` (Organisation-rooted shape trees), `uncategorised` (eligible shapes with no Organisation ancestor), and `connectors` (all named, non-ignored connectors with source/target endpoint info).
-- Connector endpoints with no `prop_name`, no vertex, or marked as ignored are represented as `{ "name": "anonymous", "level": "undefined" }` in the connectors list.
-- `description` fields in the JSON are `null` (not empty string) when not set on a shape or connector.
+- **Architecture export replaces Markdown report** — the export button (now labelled **Export architecture JSON**) produces a `.json` file instead of a `.md` file. The PNG export is retained. Both files continue to use the `{diagramname}_{pagename}` naming convention.
+
+### JSON output format
+
+The exported JSON document has five top-level fields:
+
+| Field | Description |
+|-------|-------------|
+| `page` | Page name as shown in the DrawIO tab. |
+| `generated` | Export date in `YYYY-MM-DD` format. |
+| `hierarchy` | Array of Organisation-rooted shape trees (see shape node below). |
+| `uncategorised` | Eligible shapes not inside any Organisation, sorted by level depth. |
+| `connectors` | Named, non-ignored connectors (see connector entry below). |
+
+**Shape node** (used in both `hierarchy` and `uncategorised`, recursively):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | `prop_name` of the shape. |
+| `level` | string | `prop_level` of the shape. |
+| `description` | string \| null | `prop_description`, or `null` if absent or blank. |
+| `children` | array | Nested eligible model-children. Empty array if none. |
+
+**Connector entry**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | `prop_name` of the connector. |
+| `description` | string \| null | `prop_description`, or `null` if absent or blank. |
+| `source` | endpoint | Shape at the originating end. |
+| `target` | endpoint | Shape at the receiving end. |
+
+**Endpoint** (`source` / `target`): `{ "name": string, "level": string }`. If the endpoint shape is missing, not a vertex, marked as ignored, or has no `prop_name`, both fields fall back to `"anonymous"` and `"undefined"` respectively. If the shape has a name but no level, `"level"` is `"undefined"`.
+
+### Eligibility rules
+- **Shapes**: must have `prop_name` and `prop_level` set, and not be ignored.
+- **Connectors**: must have `prop_name` set and not be ignored.
 
 ---
 
