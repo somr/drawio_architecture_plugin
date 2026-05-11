@@ -1,6 +1,6 @@
 # DrawIO Architecture Properties Plugin (v1.7)
 
-A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
+A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 
 ## Features
 
@@ -9,12 +9,20 @@ A persistent floating panel titled **Architect toolset** always visible while th
 The panel is organised into two tabs: **Properties** and **Tags**.
 
 #### Properties tab
-For each selected shape it shows:
+For a selected **shape**:
 
 - **Parent** — the direct container shape (read-only), or *— no parent —* if the shape sits at the diagram root
 - **Name** — editable text field
 - **Level** — dropdown constrained to the architectural hierarchy (see below)
 - **Description** — editable multi-line field
+
+For a selected **connector**:
+
+- **Name** — editable text field
+- **Description** — editable multi-line field
+- **Connects** — shows the source and target shape names as clickable links. Clicking a name selects that shape and centres the viewport on it. Shapes with no name or marked as ignored appear as *anonymous*.
+
+(Level and Parent are not applicable to connectors and are hidden.)
 
 ### Architectural level hierarchy
 Levels follow a strict parent → child order:
@@ -48,11 +56,11 @@ The Markdown document structure:
 - An **Uncategorised** section for shapes not contained within any Organisation
 
 #### Tags tab
-- **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur. If a connector is selected, the panel auto-switches to this tab (connectors don't have Name/Level/Description).
+- **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur.
 - **Highlight section** — select any tag from the dropdown and click **Activate** to visually emphasise all shapes and connectors carrying that tag and de-emphasise everything else. Click **Clear** to restore original styles. The highlight is applied as an undoable operation.
 
 ### Missing properties prompt
-When a shape with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes can also be marked as *Ignored* to suppress the prompt permanently.
+When a shape or connector with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes require Name, Level, and Description; connectors require Name and Description only. Both shapes and connectors can be marked as *Ignored* to suppress the prompt permanently.
 
 ---
 
