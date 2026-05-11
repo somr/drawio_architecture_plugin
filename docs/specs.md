@@ -1,13 +1,13 @@
 # DrawIO Properties Plugin — Application Specification
 
-Version: 1.6
+Version: 1.7
 Status: Approved
 
 ---
 
 ## 1. Overview
 
-A plugin for the standalone DrawIO desktop application (Linux and Windows) that allows users to manage three custom properties — **Name**, **Level**, and **Description** — on diagram shapes via a persistent, docked panel. The plugin also enforces a strict level hierarchy by automatically re-parenting shapes into container shapes, and displays connectivity information for the selected shape.
+A plugin for the standalone DrawIO desktop application (Linux and Windows) that allows users to manage custom properties on diagram shapes and connectors via a persistent, docked panel. Shapes carry **Name**, **Level**, and **Description**; connectors carry **Name** and **Description** (no level). The plugin also enforces a strict level hierarchy by automatically re-parenting shapes into container shapes, and displays connectivity information for the selected shape or connector.
 
 ---
 
@@ -21,14 +21,15 @@ A plugin for the standalone DrawIO desktop application (Linux and Windows) that 
 
 ## 3. Property Model
 
-All data is stored as custom XML attributes on the shape's cell value, using DrawIO's native property mechanism. The following property keys are used:
+All data is stored as custom XML attributes on the cell's value, using DrawIO's native property mechanism. The following property keys are used:
 
-| Property Key           | Type               | Description                                                                 |
-|------------------------|--------------------|-----------------------------------------------------------------------------|
-| `prop_name`            | string             | The name assigned to the shape.                                             |
-| `prop_level`           | string (enum)      | The level assigned to the shape. Must be one of the values in section 4.   |
-| `prop_description`     | string             | A free-text description of the shape.                                       |
-| `properties_ignored`   | boolean (`"true"`) | Marks a shape as explicitly excluded from property management.              |
+| Property Key           | Applies to          | Type               | Description                                                                 |
+|------------------------|---------------------|--------------------|-----------------------------------------------------------------------------|
+| `prop_name`            | Shapes & connectors | string             | The name assigned to the cell.                                              |
+| `prop_level`           | Shapes only         | string (enum)      | The level assigned to the shape. Must be one of the values in section 4.   |
+| `prop_description`     | Shapes & connectors | string             | A free-text description of the cell.                                        |
+| `properties_ignored`   | Shapes & connectors | boolean (`"true"`) | Marks a cell as explicitly excluded from property management.               |
+| `prop_tags`            | Shapes & connectors | string             | Comma-separated tag names (see section 13).                                 |
 
 Property changes are persisted to the DrawIO file immediately via DrawIO's model transaction mechanism (undoable).
 
@@ -56,9 +57,9 @@ Organization shapes are at the top of the hierarchy and are never placed inside 
 
 ### 5.1 Display
 
-A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.5`) to allow users to confirm the deployed version.
+A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.7`) to allow users to confirm the deployed version.
 
-The panel displays the following fields, in order:
+**Shape fields** (shown when a shape is selected):
 
 | Field       | Type         | Editable | Description                                                          |
 |-------------|--------------|----------|----------------------------------------------------------------------|
@@ -69,15 +70,25 @@ The panel displays the following fields, in order:
 
 The **Parent** field shows `ParentName (ParentLevel)` when a parent exists, or `— no parent —` in grey when the shape sits at the diagram root.
 
+**Connector fields** (shown when a connector is selected, see section 5.7):
+
+| Field       | Type         | Editable | Description                                          |
+|-------------|--------------|----------|------------------------------------------------------|
+| Name        | Text input   | Yes      | The connector's `prop_name`.                         |
+| Description | Textarea     | Yes      | The connector's `prop_description`.                  |
+
+Parent and Level are **not shown** for connectors.
+
 ### 5.2 States
 
-| Condition                         | Panel State                                                     |
-|-----------------------------------|-----------------------------------------------------------------|
-| No shape selected                 | All fields reset. Parent shows `—`.                             |
-| Multiple shapes selected          | All fields reset. Parent shows `—`.                             |
-| Single edge selected              | All fields reset. Parent shows `—`.                             |
-| Single shape selected (normal)    | Fields populated and editable. Adopt Children button visible if level has valid children. |
-| Single shape selected (ignored)   | All fields reset. Parent shows `—`. Un-ignore button shown.     |
+| Condition                              | Panel State                                                                          |
+|----------------------------------------|--------------------------------------------------------------------------------------|
+| No shape selected                      | All fields reset. Parent shows `—`.                                                  |
+| Multiple shapes selected               | All fields reset. Parent shows `—`.                                                  |
+| Single shape selected (normal)         | Shape fields populated and editable. Adopt Children button visible if level has valid children. |
+| Single shape selected (ignored)        | All fields reset. Parent shows `—`. Un-ignore button shown.                          |
+| Single connector selected (normal)     | Name and Description editable. Connects section shows source and target shapes.      |
+| Single connector selected (ignored)    | All fields reset. Un-ignore button shown.                                            |
 
 ### 5.3 Saving
 
@@ -120,27 +131,53 @@ The section is only shown when:
 
 The section is hidden in the empty and ignored states, and is not shown for single-page files.
 
+### 5.7 Connector Properties
+
+When a single connector is selected (and not ignored), the panel switches to connector mode:
+
+- The **Name** and **Description** fields are enabled and editable. Saving follows the same blur/change rules as shapes (section 5.3).
+- The **Level** dropdown and **Parent** display are hidden.
+- A **Connects** section replaces Connected Shapes, Also In, and the report button. It shows:
+
+  `[source name] → [target name]`
+
+  Each name is the connected shape's `prop_name`. If a connected shape has no `prop_name`, is marked as ignored, or the connector endpoint is unattached, the name is shown as **anonymous** in grey italic and is not clickable.
+
+  Named endpoints are rendered as blue underlined links. Clicking a link:
+  1. Selects the connected shape (triggering the panel to switch to that shape's properties).
+  2. Centres the viewport on the shape (`graph.scrollCellToVisible`).
+
 ---
 
 ## 6. Missing Properties Popup
 
 ### 6.1 Trigger
 
-The popup is shown automatically when a single non-ignored shape is selected and any of `prop_name`, `prop_level`, or `prop_description` is absent.
+The popup is shown automatically when:
+- A single non-ignored **shape** is selected and any of `prop_name`, `prop_level`, or `prop_description` is absent, **or**
+- A single non-ignored **connector** is selected and any of `prop_name` or `prop_description` is absent.
 
-### 6.2 Behaviour
+### 6.2 Behaviour — Shapes
 
-- All three fields are shown.
-- Fields that already have values on the shape are pre-filled and disabled.
+- Name, Level, and Description fields are shown.
+- Fields that already have values are pre-filled and disabled.
 - Only missing fields are editable.
 - The Level field is a dropdown constrained to the valid level values.
+- Dialog title: **Shape Properties Required**.
 
-### 6.3 Buttons
+### 6.3 Behaviour — Connectors
+
+- Name and Description fields are shown (Level is omitted entirely).
+- Fields that already have values are pre-filled and disabled.
+- Only missing fields are editable.
+- Dialog title: **Connector Properties Required**.
+
+### 6.4 Buttons
 
 | Button     | Action                                                                                                  |
 |------------|---------------------------------------------------------------------------------------------------------|
-| **Save**   | Writes entered values to the shape. Dismisses popup. Panel is populated with the new values.            |
-| **Ignore** | Writes `properties_ignored: "true"` to the shape. Dismisses popup. Panel switches to ignored state.     |
+| **Save**   | Writes entered values to the cell. Dismisses popup. Panel populates with the new values.                |
+| **Ignore** | Writes `properties_ignored: "true"` to the cell. Dismisses popup. Panel switches to ignored state.      |
 
 ---
 
@@ -187,18 +224,21 @@ A shape is promoted to a DrawIO container (`container=1;collapsible=0;` added to
 
 ## 8. Ignore / Un-ignore
 
-- A shape with `properties_ignored: "true"` will never trigger the missing properties popup.
-- When an ignored shape is selected, the panel shows an **Un-ignore this shape** button.
-- Clicking **Un-ignore** removes the `properties_ignored` attribute from the shape and immediately re-evaluates the shape as if it was newly selected (which may trigger the missing properties popup).
+The ignore mechanism applies to both shapes and connectors identically:
+
+- A cell with `properties_ignored: "true"` will never trigger the missing properties popup.
+- When an ignored shape or connector is selected, the panel shows an **Un-ignore** button. All editable fields are disabled.
+- Clicking **Un-ignore** removes the `properties_ignored` attribute from the cell and immediately re-evaluates it as if newly selected (which may trigger the missing properties popup if properties are incomplete).
+- Ignored connectors appear as **anonymous** in the Connects section of other connectors (section 5.7).
 
 ---
 
 ## 9. Multi-selection
 
-- When two or more shapes are selected simultaneously:
+- When two or more cells (shapes or connectors, in any combination) are selected simultaneously:
   - All panel fields are reset.
   - No popup is triggered.
-  - The Adopt Children, Un-ignore, Connected Shapes, and Also In sections are all hidden.
+  - The Adopt Children, Un-ignore, Connected Shapes, Connects, and Also In sections are all hidden.
 
 ---
 
@@ -346,7 +386,7 @@ The panel is split into two tabs:
 
 | Tab | Content |
 |-----|---------|
-| **Properties** | All existing fields (Parent, Name, Level, Description, Adopt Children, Connected shapes, Also in..., Generate report button). Unchanged from v1.5. |
+| **Properties** | Shape mode: Parent, Name, Level, Description, Adopt Children, Connected shapes, Also in..., Generate report button. Connector mode: Name, Description, Connects section. |
 | **Tags** | Tags field for the selected cell; Highlight section (see section 14). |
 
 ### 13.3 Tags field
@@ -364,11 +404,11 @@ the selected cell's tags.
 The field saves on blur via `ShapeProperties.setTags()`. An empty field removes the `prop_tags`
 attribute from the cell.
 
-### 13.4 Edge selection
+### 13.4 Connector selection
 
-When a single connector is selected, the Properties tab fields are all disabled (edges do not
-have Name / Level / Description), and the panel auto-switches to the Tags tab. Selecting a shape
-auto-switches back to the Properties tab.
+When a single connector is selected, the panel switches to the **Properties tab** (not the Tags
+tab) and activates Name and Description fields for the connector. The Tags tab remains accessible
+and editable. Selecting a shape also keeps the Properties tab active.
 
 ---
 
