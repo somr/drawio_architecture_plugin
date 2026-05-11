@@ -280,37 +280,117 @@ A connector is included in the connectors list if:
 
 ### 10.5 JSON structure
 
+#### 10.5.1 Top-level document
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `page` | string | Raw page name as shown in the DrawIO tab. |
+| `generated` | string | Local date of export in `YYYY-MM-DD` format. |
+| `hierarchy` | array of shape nodes | Eligible Organisation shapes and their full subtrees. Empty array if none. |
+| `uncategorised` | array of shape nodes | Eligible shapes not reached via any Organisation, sorted by level depth. Empty array if none. |
+| `connectors` | array of connector entries | Named, non-ignored connectors. Empty array if none. |
+
+#### 10.5.2 Shape node
+
+Appears in both `hierarchy` and `uncategorised`. Children of a shape are nested recursively.
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `name` | string | no | The shape's `prop_name`. |
+| `level` | string | no | The shape's `prop_level`. One of the values from section 4. |
+| `description` | string \| null | yes | The shape's `prop_description`. `null` when the property is absent or blank. |
+| `children` | array of shape nodes | no | Eligible model-children of this shape. Always present; empty array `[]` when none. |
+
+#### 10.5.3 Connector entry
+
+| Field | Type | Nullable | Description |
+|-------|------|----------|-------------|
+| `name` | string | no | The connector's `prop_name`. Always set (required for inclusion). |
+| `description` | string \| null | yes | The connector's `prop_description`. `null` when absent or blank. |
+| `source` | endpoint object | no | The shape at the originating end of the connector. |
+| `target` | endpoint object | no | The shape at the receiving end of the connector. |
+
+#### 10.5.4 Endpoint object
+
+Used for `source` and `target` inside a connector entry.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | The connected shape's `prop_name`, or `"anonymous"` (see rules below). |
+| `level` | string | The connected shape's `prop_level`, or `"undefined"` (see rules below). |
+
+**Resolution rules** (applied in order):
+
+| Condition | `name` | `level` |
+|-----------|--------|---------|
+| Endpoint cell is missing (dangling connector) | `"anonymous"` | `"undefined"` |
+| Endpoint cell is not a vertex | `"anonymous"` | `"undefined"` |
+| Endpoint shape is marked as ignored | `"anonymous"` | `"undefined"` |
+| Endpoint shape has no `prop_name` | `"anonymous"` | `"undefined"` |
+| Endpoint shape has `prop_name` but no `prop_level` | shape's `prop_name` | `"undefined"` |
+| Endpoint shape has both `prop_name` and `prop_level` | shape's `prop_name` | shape's `prop_level` |
+
+#### 10.5.5 Complete annotated example
+
 ```json
 {
-  "page": "Page Name",
-  "generated": "YYYY-MM-DD",
-  "hierarchy": [ ...shape tree rooted at Organisation nodes... ],
-  "uncategorised": [ ...eligible shapes with no Organisation ancestor... ],
-  "connectors": [ ...named connectors... ]
+  "page": "Cloud Infrastructure",
+  "generated": "2026-05-11",
+  "hierarchy": [
+    {
+      "name": "Acme Corp",
+      "level": "Organization",
+      "description": "Primary organisation.",
+      "children": [
+        {
+          "name": "Billing System",
+          "level": "Software System",
+          "description": null,
+          "children": [
+            {
+              "name": "Payment Pipeline",
+              "level": "Pipeline / Workflow / Tier",
+              "description": "Handles card processing.",
+              "children": [
+                {
+                  "name": "Auth Service",
+                  "level": "Service",
+                  "description": null,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "uncategorised": [
+    {
+      "name": "Legacy DB",
+      "level": "Node",
+      "description": "Old database, not yet migrated.",
+      "children": []
+    }
+  ],
+  "connectors": [
+    {
+      "name": "Charge request",
+      "description": "Initiates card charge flow.",
+      "source": { "name": "Billing System", "level": "Software System" },
+      "target": { "name": "Auth Service",   "level": "Service" }
+    },
+    {
+      "name": "DB read",
+      "description": null,
+      "source": { "name": "Auth Service", "level": "Service" },
+      "target": { "name": "anonymous",    "level": "undefined" }
+    }
+  ]
 }
 ```
 
-**Shape node:**
-```json
-{
-  "name": "My Service",
-  "level": "Service",
-  "description": "Handles auth",
-  "children": [ ...nested eligible shapes... ]
-}
-```
-`description` is `null` when not set. `children` is always an array (empty if none).
-
-**Connector entry:**
-```json
-{
-  "name": "API call",
-  "description": "REST endpoint",
-  "source": { "name": "Service A", "level": "Service" },
-  "target": { "name": "anonymous", "level": "undefined" }
-}
-```
-If an endpoint shape has no `prop_name`, no vertex, or is marked as ignored, its entry shows `"name": "anonymous"` and `"level": "undefined"`. If the endpoint has a name but no level, `"level"` is `"undefined"`.
+In the example, `"DB read"` has an anonymous target because the connected shape has no `prop_name`. `"Legacy DB"` appears in `uncategorised` because it is not contained within any Organisation node.
 
 ### 10.6 Hierarchy traversal
 
