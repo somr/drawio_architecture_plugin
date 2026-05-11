@@ -48,12 +48,24 @@ Lists other pages in the file that contain a shape with the same name and level.
 
 ### Architecture export
 
-When no shape is selected, a green **Export architecture JSON** button appears at the bottom of the panel. Clicking it exports the current page as a PNG and produces a JSON file describing the shape hierarchy and all named connectors. Both files are saved next to the `.drawio` file using a `{diagramname}_{pagename}` naming convention.
+When no shape is selected, a green **Export architecture JSON** button appears at the bottom of the panel. Clicking it saves two files next to the `.drawio` file using a `{diagramname}_{pagename}` naming convention:
 
-The JSON structure:
-- `hierarchy` — tree of eligible shapes rooted at Organisation nodes, each with `name`, `level`, `description`, and nested `children`
-- `uncategorised` — eligible shapes with no Organisation ancestor, sorted by level depth
-- `connectors` — all named, non-ignored connectors with `name`, `description`, and `source`/`target` endpoint info (`name` and `level`); unnamed or ignored endpoints appear as `"anonymous"` / `"undefined"`
+- **`{name}.png`** — full-page PNG export of the current page (white background).
+- **`{name}.json`** — JSON document describing the shape hierarchy and all named connectors.
+
+**JSON top-level fields:**
+
+| Field | Description |
+|-------|-------------|
+| `page` | Page name as shown in the DrawIO tab. |
+| `generated` | Export date (`YYYY-MM-DD`). |
+| `hierarchy` | Array of Organisation-rooted shape trees. Each shape has `name`, `level`, `description` (null if blank), and `children` (nested eligible shapes). |
+| `uncategorised` | Eligible shapes not inside any Organisation, sorted by level depth. Same shape structure as `hierarchy`. |
+| `connectors` | Named, non-ignored connectors. Each entry has `name`, `description` (null if blank), `source`, and `target`. |
+
+Connector endpoints (`source`/`target`) each carry `name` and `level`. If an endpoint shape is unnamed, ignored, or the connector is dangling, both fields show `"anonymous"` / `"undefined"` respectively.
+
+Shapes must have both `prop_name` and `prop_level` to appear in the hierarchy. Connectors must have `prop_name` to appear in the connectors list.
 
 #### Tags tab
 - **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur.
