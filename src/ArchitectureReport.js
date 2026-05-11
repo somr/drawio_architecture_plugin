@@ -1,14 +1,5 @@
 'use strict';
 
-// Maps prop_level values to Markdown heading depths.
-var LEVEL_HEADING = {
-  'Organization':              2,
-  'Software System':           3,
-  'Pipeline / Workflow / Tier': 4,
-  'Service':                   5,
-  'Node':                      6,
-};
-
 // Order used when sorting uncategorised shapes.
 var LEVEL_ORDER = {
   'Organization':              0,
@@ -27,30 +18,24 @@ ArchitectureReport.prototype.generate = function() {
   var ui = this.ui;
   var sp = this.shapeProps;
 
-  // Validate that the file has been saved to disk.
   var file = ui.getCurrentFile();
   if (!file || !file.fileObject || !file.fileObject.path) {
-    mxUtils.alert('Save the diagram before generating a report.');
+    mxUtils.alert('Save the diagram before exporting.');
     return;
   }
 
-  var filePath = file.fileObject.path;
-  var sep      = filePath.indexOf('/') !== -1 ? '/' : '\\';
-  var fileDir  = filePath.substring(0, filePath.lastIndexOf(sep));
-  var diagName = _sanitize((file.fileObject.name || 'diagram').replace(/\.[^.]+$/, ''));
-
-  var page     = ui.currentPage;
-  var pageName = page
+  var filePath     = file.fileObject.path;
+  var sep          = filePath.indexOf('/') !== -1 ? '/' : '\\';
+  var fileDir      = filePath.substring(0, filePath.lastIndexOf(sep));
+  var diagName     = _sanitize((file.fileObject.name || 'diagram').replace(/\.[^.]+$/, ''));
+  var page         = ui.currentPage;
+  var pageName     = page
     ? (page.getName ? page.getName() : (page.name || 'page'))
     : 'page';
+  var base         = diagName + '_' + _sanitize(pageName);
+  var jsonFilename = base + '.json';
+  var jsonPath     = fileDir + sep + jsonFilename;
 
-  var base        = diagName + '_' + _sanitize(pageName);
-  var pngFilename = base + '.png';
-  var mdFilename  = base + '.md';
-  var pngPath     = fileDir + sep + pngFilename;
-  var mdPath      = fileDir + sep + mdFilename;
-
-  // Collect eligible shapes on the current page.
   var graph         = ui.editor.graph;
   var eligibleCells = _collectEligible(graph, sp);
 
@@ -59,42 +44,123 @@ ArchitectureReport.prototype.generate = function() {
     return;
   }
 
-  // Export the PNG first, then write the Markdown.
+  var pngFilename = base + '.png';
+  var pngPath     = fileDir + sep + pngFilename;
+
+  var json = _buildJson(sp, graph, eligibleCells, pageName);
+  var data = JSON.stringify(json, null, 2);
+
   _exportPng(ui, pngPath, function(pngErr) {
     if (pngErr) {
       mxUtils.alert('PNG export failed: ' + pngErr);
       return;
     }
-
-    var md = _buildMarkdown(sp, graph, eligibleCells, pageName, pngFilename);
-
     window.electron.request(
-      { action: 'writeFile', path: mdPath, data: md, enc: 'utf8' },
-      function() {
-        mxUtils.alert('Report saved:\n• ' + mdFilename + '\n• ' + pngFilename);
-      },
-      function(err) {
-        mxUtils.alert('Could not write report: ' + (err || 'unknown error'));
-      }
+      { action: 'writeFile', path: jsonPath, data: data, enc: 'utf8' },
+      function()    { mxUtils.alert('Exported:\n• ' + jsonFilename + '\n• ' + pngFilename); },
+      function(err) { mxUtils.alert('Could not write export: ' + (err || 'unknown error')); }
     );
   });
 };
 
 // ---------------------------------------------------------------------------
-// Eligibility
+// JSON builder
 // ---------------------------------------------------------------------------
 
-function _collectEligible(graph, sp) {
+function _buildJson(sp, graph, eligibleCells, pageName) {
+  var eligibleIds = {};
+  eligibleCells.forEach(function(c) { eligibleIds[c.id] = true; });
+  var emitted = {};
+
+  var hierarchy = [];
+  eligibleCells.forEach(function(cell) {
+    if (!emitted[cell.id] && sp.getProperty(cell, sp.PROP_LEVEL) === 'Organization') {
+      hierarchy.push(_buildJsonSubtree(cell, graph, sp, eligibleIds, emitted));
+    }
+  });
+
+  var uncategorised = eligibleCells
+    .filter(function(c) { return !emitted[c.id]; })
+    .sort(function(a, b) {
+      var la = sp.getProperty(a, sp.PROP_LEVEL) || '';
+      var lb = sp.getProperty(b, sp.PROP_LEVEL) || '';
+      return (LEVEL_ORDER[la] !== undefined ? LEVEL_ORDER[la] : 99) -
+             (LEVEL_ORDER[lb] !== undefined ? LEVEL_ORDER[lb] : 99);
+    })
+    .map(function(cell) {
+      return _buildJsonSubtree(cell, graph, sp, eligibleIds, emitted);
+    });
+
+  var connectors = _collectConnectors(graph, sp);
+
+  var today     = new Date();
+  var generated = today.getFullYear() + '-' + _pad2(today.getMonth() + 1) + '-' + _pad2(today.getDate());
+
+  return {
+    page:          pageName,
+    generated:     generated,
+    hierarchy:     hierarchy,
+    uncategorised: uncategorised,
+    connectors:    connectors,
+  };
+}
+
+function _buildJsonSubtree(cell, graph, sp, eligibleIds, emitted) {
+  emitted[cell.id] = true;
+
+  var desc     = sp.getProperty(cell, sp.PROP_DESCRIPTION);
+  var children = graph.model.getChildCells(cell, true, false)
+    .filter(function(c) { return eligibleIds[c.id] && !emitted[c.id]; })
+    .map(function(c) { return _buildJsonSubtree(c, graph, sp, eligibleIds, emitted); });
+
+  return {
+    name:        sp.getProperty(cell, sp.PROP_NAME)  || null,
+    level:       sp.getProperty(cell, sp.PROP_LEVEL) || null,
+    description: (desc && desc.trim()) ? desc : null,
+    children:    children,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Connector collector
+// ---------------------------------------------------------------------------
+
+function _collectConnectors(graph, sp) {
   var result = [];
+
   Object.keys(graph.model.cells).forEach(function(id) {
     var cell = graph.model.cells[id];
-    if (!cell.vertex)                          return;
-    if (sp.isIgnored(cell))                    return;
-    if (!sp.getProperty(cell, sp.PROP_NAME))   return;
-    if (!sp.getProperty(cell, sp.PROP_LEVEL))  return;
-    result.push(cell);
+    if (!cell.edge)          return;
+    if (sp.isIgnored(cell))  return;
+
+    var name = sp.getProperty(cell, sp.PROP_NAME);
+    if (!name || !name.trim()) return;
+
+    var desc = sp.getProperty(cell, sp.PROP_DESCRIPTION);
+
+    result.push({
+      name:        name,
+      description: (desc && desc.trim()) ? desc : null,
+      source:      _endpointInfo(graph.model.getTerminal(cell, true),  sp),
+      target:      _endpointInfo(graph.model.getTerminal(cell, false), sp),
+    });
   });
+
   return result;
+}
+
+function _endpointInfo(cell, sp) {
+  if (!cell || !cell.vertex) return { name: 'anonymous', level: 'undefined' };
+  if (sp.isIgnored(cell))    return { name: 'anonymous', level: 'undefined' };
+
+  var name = sp.getProperty(cell, sp.PROP_NAME);
+  if (!name || !name.trim()) return { name: 'anonymous', level: 'undefined' };
+
+  var level = sp.getProperty(cell, sp.PROP_LEVEL);
+  return {
+    name:  name,
+    level: (level && level.trim()) ? level : 'undefined',
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -119,8 +185,8 @@ function _exportPng(ui, path, callback) {
       },
       null,        // format — PNG by default
       null,        // imageCache
-      '#ffffff',   // background — white (page setting is often transparent)
-      function(err) { callback(String(err)); }   // exportToCanvas error callback
+      '#ffffff',   // background — white
+      function(err) { callback(String(err)); }
     );
   } catch (e) {
     callback(String(e));
@@ -128,127 +194,29 @@ function _exportPng(ui, path, callback) {
 }
 
 // ---------------------------------------------------------------------------
-// Markdown builder
+// Eligibility
 // ---------------------------------------------------------------------------
 
-function _buildMarkdown(sp, graph, eligibleCells, pageName, pngFilename) {
-  var eligibleIds = {};
-  eligibleCells.forEach(function(c) { eligibleIds[c.id] = true; });
-  var emitted = {};
-  var lines   = [];
-
-  // The HTML comment makes the file start with '<!' so DrawIO's writeFile
-  // content-type check accepts it. Markdown renderers ignore HTML comments.
-  lines.push('<!-- generated by Architect toolset for DrawIO -->');
-  lines.push('');
-  lines.push('# ' + pageName);
-  lines.push('');
-  lines.push('![](' + pngFilename + ')');
-  lines.push('');
-
-  // Emit all Organisation shapes and their subtrees.
-  eligibleCells.forEach(function(cell) {
-    if (!emitted[cell.id] && sp.getProperty(cell, sp.PROP_LEVEL) === 'Organization') {
-      _emitSubtree(cell, 2, lines, graph, sp, eligibleIds, emitted);
-    }
+function _collectEligible(graph, sp) {
+  var result = [];
+  Object.keys(graph.model.cells).forEach(function(id) {
+    var cell = graph.model.cells[id];
+    if (!cell.vertex)                         return;
+    if (sp.isIgnored(cell))                   return;
+    if (!sp.getProperty(cell, sp.PROP_NAME))  return;
+    if (!sp.getProperty(cell, sp.PROP_LEVEL)) return;
+    result.push(cell);
   });
-
-  // Anything not yet emitted goes into the Uncategorised section.
-  var uncategorised = eligibleCells.filter(function(c) { return !emitted[c.id]; });
-
-  if (uncategorised.length > 0) {
-    lines.push('---');
-    lines.push('');
-    lines.push('## Uncategorised');
-    lines.push('');
-    lines.push('*Shapes with properties that are not contained within any Organisation.*');
-    lines.push('');
-
-    uncategorised.sort(function(a, b) {
-      var la = sp.getProperty(a, sp.PROP_LEVEL) || '';
-      var lb = sp.getProperty(b, sp.PROP_LEVEL) || '';
-      return (LEVEL_ORDER[la] !== undefined ? LEVEL_ORDER[la] : 99) -
-             (LEVEL_ORDER[lb] !== undefined ? LEVEL_ORDER[lb] : 99);
-    });
-
-    uncategorised.forEach(function(cell) {
-      if (!emitted[cell.id]) {
-        var depth = LEVEL_HEADING[sp.getProperty(cell, sp.PROP_LEVEL)] || 3;
-        _emitSubtree(cell, depth, lines, graph, sp, eligibleIds, emitted);
-      }
-    });
-  }
-
-  return lines.join('\n');
-}
-
-// Recursively emits a cell and all its eligible children.
-function _emitSubtree(cell, headingDepth, lines, graph, sp, eligibleIds, emitted) {
-  if (emitted[cell.id]) return;
-  emitted[cell.id] = true;
-
-  var name  = sp.getProperty(cell, sp.PROP_NAME)        || '(unnamed)';
-  var level = sp.getProperty(cell, sp.PROP_LEVEL)       || '';
-  var desc  = sp.getProperty(cell, sp.PROP_DESCRIPTION) || '';
-  var depth = Math.min(headingDepth, 6);
-
-  lines.push(new Array(depth + 1).join('#') + ' ' + name);
-  lines.push('');
-
-  if (level) {
-    lines.push('*' + level + '*');
-    lines.push('');
-  }
-
-  if (desc) {
-    // Description is rendered verbatim as Markdown
-    lines.push(desc);
-    lines.push('');
-  }
-
-  var connText = _buildConnectionsText(cell, graph, sp);
-  if (connText) {
-    lines.push('**Connections:** ' + connText);
-    lines.push('');
-  }
-
-  // Recurse into eligible model children.
-  var children = graph.model.getChildCells(cell, true, false);
-  children.forEach(function(child) {
-    if (eligibleIds[child.id] && !emitted[child.id]) {
-      _emitSubtree(child, depth + 1, lines, graph, sp, eligibleIds, emitted);
-    }
-  });
-}
-
-// Builds the connections inline text for a cell entry.
-function _buildConnectionsText(cell, graph, sp) {
-  var edges = graph.getEdges(cell);
-  if (!edges || edges.length === 0) return '';
-
-  var parts = [];
-  edges.forEach(function(edge) {
-    var isOutgoing = edge.source === cell;
-    var other      = isOutgoing ? edge.target : edge.source;
-    if (!other || !other.vertex) return;
-
-    var arrow = isOutgoing ? '→' : '←';
-
-    var rawName  = sp.getProperty(other, sp.PROP_NAME) || graph.getLabel(other) || '';
-    var connName = rawName.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '').trim() || '(unnamed)';
-
-    var rawLabel  = graph.getLabel(edge) || '';
-    var edgeLabel = rawLabel.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]*>/g, '').trim();
-
-    parts.push(arrow + ' ' + connName + (edgeLabel ? ' (' + edgeLabel + ')' : ''));
-  });
-
-  return parts.join(', ');
+  return result;
 }
 
 // ---------------------------------------------------------------------------
-// Filename sanitisation
+// Helpers
 // ---------------------------------------------------------------------------
+
+function _pad2(n) {
+  return n < 10 ? '0' + n : String(n);
+}
 
 function _sanitize(str) {
   return String(str || '')

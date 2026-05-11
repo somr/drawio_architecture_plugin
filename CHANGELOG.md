@@ -4,6 +4,15 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.8] — 2026-05-11
+
+### Changed
+- **Architecture export replaces Markdown report** — the export button (now labelled **Export architecture JSON**) produces a `.json` file instead of a `.md` file. The PNG export is retained. The JSON contains three top-level sections: `hierarchy` (Organisation-rooted shape trees), `uncategorised` (eligible shapes with no Organisation ancestor), and `connectors` (all named, non-ignored connectors with source/target endpoint info).
+- Connector endpoints with no `prop_name`, no vertex, or marked as ignored are represented as `{ "name": "anonymous", "level": "undefined" }` in the connectors list.
+- `description` fields in the JSON are `null` (not empty string) when not set on a shape or connector.
+
+---
+
 ## [1.7] — 2026-05-11
 
 ### Added

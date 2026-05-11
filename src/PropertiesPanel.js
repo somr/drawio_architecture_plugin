@@ -1,6 +1,6 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.7';
+var PLUGIN_VERSION = '1.8';
 
 var ArchitectureReport = require('./ArchitectureReport');
 var TagHighlight       = require('./TagHighlight');
@@ -800,7 +800,7 @@ PropertiesPanel.prototype._buildReportButton = function(container) {
   var self = this;
 
   var btn = document.createElement('button');
-  btn.textContent = 'Generate architecture report';
+  btn.textContent = 'Export architecture JSON';
   btn.style.cssText = [
     'display:none',
     'margin-top:12px',

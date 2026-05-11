@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.7)
+# DrawIO Architecture Properties Plugin (v1.8)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 
@@ -46,14 +46,14 @@ Lists all shapes connected to the selected shape via a connector, with:
 ### Also in...
 Lists other pages in the file that contain a shape with the same name and level. Each entry is a clickable link that switches to that page and centres the viewport on the matching shape.
 
-### Architecture report
+### Architecture export
 
-When no shape is selected, a green **Generate architecture report** button appears at the bottom of the panel. Clicking it exports the current page as a PNG and produces a Markdown document that includes the image and describes all eligible shapes in hierarchy order. Both files are saved next to the `.drawio` file using a `{diagramname}_{pagename}` naming convention.
+When no shape is selected, a green **Export architecture JSON** button appears at the bottom of the panel. Clicking it exports the current page as a PNG and produces a JSON file describing the shape hierarchy and all named connectors. Both files are saved next to the `.drawio` file using a `{diagramname}_{pagename}` naming convention.
 
-The Markdown document structure:
-- H1 page title with embedded PNG
-- H2–H6 headings per shape level (Organisation → Node), with description and connections
-- An **Uncategorised** section for shapes not contained within any Organisation
+The JSON structure:
+- `hierarchy` — tree of eligible shapes rooted at Organisation nodes, each with `name`, `level`, `description`, and nested `children`
+- `uncategorised` — eligible shapes with no Organisation ancestor, sorted by level depth
+- `connectors` — all named, non-ignored connectors with `name`, `description`, and `source`/`target` endpoint info (`name` and `level`); unnamed or ignored endpoints appear as `"anonymous"` / `"undefined"`
 
 #### Tags tab
 - **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur.
