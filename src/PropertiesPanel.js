@@ -1,6 +1,6 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.9';
+var PLUGIN_VERSION = '1.9.1';
 
 var ArchitectureReport  = require('./ArchitectureReport');
 var TagHighlight        = require('./TagHighlight');
