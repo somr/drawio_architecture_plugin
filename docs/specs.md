@@ -463,7 +463,7 @@ The renderer builds the `multipart/form-data` body (preamble + file bytes + epil
 | `X-Atlassian-Token` header | `no-check` (required by Confluence to bypass CSRF protection) |
 | Body | `multipart/form-data` assembled in the renderer, transported as base64 over IPC |
 
-**Prerequisite:** The `httpRequest` case must be present in the `rendererReq` switch in `drawio-desktop/src/main/electron.js`, and DrawIO Desktop must be rebuilt from source.
+**Prerequisite:** The `httpRequest` case must be present in the `rendererReq` switch in `drawio-desktop/src/main/electron.js`, and DrawIO Desktop must be rebuilt from source. Available on the `drawio-desktop` `dev` branch from commit `8c435ed` onward. Note: `electron.js` uses ESM (`"type": "module"` in `package.json`); `http` and `https` must be top-level ESM imports — `require()` is not available.
 
 ### 11.6 Error conditions (Confluence push)
 

@@ -4,6 +4,20 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.9.1] — 2026-05-20
+
+### Fixed
+- **Confluence push now works** — three successive obstacles were diagnosed and resolved:
+  1. DrawIO Desktop's `confluenceUpload` IPC action does not exist in this build; calls fell through the switch silently and returned HTTP 0.
+  2. Switching to `fetch()` was blocked by DrawIO's `connect-src` Content Security Policy, which whitelists only `*.draw.io` and `*.diagrams.net`.
+  3. Using Node.js `require('https')` in the renderer failed because the renderer runs with `nodeIntegration: false`.
+- **Solution:** a `httpRequest` action was added to the `rendererReq` IPC handler in DrawIO Desktop's main process (`src/main/electron.js`). The main process is not subject to CSP and has full Node.js access. `https` and `http` are imported as top-level ESM imports (the main process uses `"type": "module"`; `require()` is not available). The renderer assembles the `multipart/form-data` body, base64-encodes it for IPC transport, and the main process sends the raw bytes to Confluence.
+
+### Prerequisite
+This release requires a patched DrawIO Desktop build with the `httpRequest` IPC action. See `drawio-desktop` branch `dev`, commit `8c435ed`.
+
+---
+
 ## [1.9] — 2026-05-20
 
 ### Added
