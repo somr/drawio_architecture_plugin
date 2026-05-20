@@ -445,20 +445,17 @@ Clicking **Push to Confluence** triggers the following sequence:
 
 The push button is disabled (grey) when credentials are not configured or there are no valid target page URLs.
 
-### 11.5 Upload IPC contract
+### 11.5 Upload mechanism
 
-Uploads are performed via the DrawIO Electron IPC bridge (`window.electron.request`) with action `confluenceUpload`. The payload fields are:
+Uploads use `fetch()` directly with HTTP Basic auth, bypassing the DrawIO Electron IPC bridge. This ensures the plugin's own stored credentials are always used regardless of any DrawIO-managed Confluence session.
 
-| Field | Value |
-|-------|-------|
-| `action` | `"confluenceUpload"` |
-| `url` | `{baseUrl}/wiki/rest/api/content/{pageId}/child/attachment` |
-| `auth` | Base-64 encoded `{email}:{apiToken}` |
-| `filename` | Attachment filename |
-| `imageBase64` | Base-64 encoded file content |
-| `contentType` | MIME type (`image/png` or `application/json`) |
-
-**Prerequisite:** The DrawIO Desktop Electron IPC handler for `confluenceUpload` must forward the `contentType` field to the multipart request. If the handler hard-codes `image/png`, the JSON attachment will be stored with the wrong MIME type. The plugin logs a console warning when uploading non-PNG content.
+| Request detail | Value |
+|----------------|-------|
+| Method | `POST` |
+| URL | `{baseUrl}/wiki/rest/api/content/{pageId}/child/attachment` |
+| `Authorization` header | `Basic {base64({email}:{apiToken})}` |
+| `X-Atlassian-Token` header | `no-check` (required by Confluence to bypass CSRF protection) |
+| Body | `multipart/form-data` with a single `file` field |
 
 ### 11.6 Error conditions (Confluence push)
 
@@ -469,8 +466,8 @@ Uploads are performed via the DrawIO Electron IPC bridge (`window.electron.reque
 | No eligible shapes on current page | Status: "No shapes with Name and Level found on this page." |
 | No valid target page URLs | Status message describing whether `confluence_page` is absent or only contains invalid URLs. |
 | PNG export failure | Status: "PNG export failed: {reason}." |
-| Per-page upload failure | Per-page `✗` line with the error from the IPC layer. Other pages continue. |
-| `window.electron` not available | Upload callback receives error: "window.electron IPC bridge not found…" |
+| HTTP error from Confluence | Per-page `✗` line with `HTTP {status}: {message}` parsed from the response body. Other pages continue. |
+| Network error (no response) | Per-page `✗` line with `Network error: {reason}`. |
 
 ---
 

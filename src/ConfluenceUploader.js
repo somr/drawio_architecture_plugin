@@ -72,10 +72,10 @@ ConfluenceUploader.prototype.getPages = function() {
 
 var LOG = '[ConfluenceUploader]';
 
-// Uploads a single file to a Confluence page attachment slot via the DrawIO
-// Electron IPC bridge. contentType should be 'image/png' or 'application/json'.
-// The confluenceUpload IPC handler must support the contentType field — see
-// the IPC patch note in docs/specs.md.
+// Uploads a single file to a Confluence page as an attachment.
+// Uses fetch() with Basic auth so credentials are always ours, independent
+// of any DrawIO-managed Confluence session. X-Atlassian-Token is required
+// by the Confluence REST API to bypass its CSRF protection on POST requests.
 ConfluenceUploader.prototype.upload = function(pageId, filename, base64, contentType, callback) {
   var cfg = this._config;
   if (!cfg) {
@@ -83,72 +83,51 @@ ConfluenceUploader.prototype.upload = function(pageId, filename, base64, content
     callback(new Error('No Confluence credentials configured.'));
     return;
   }
-  if (!window.electron || typeof window.electron.request !== 'function') {
-    console.error(
-      LOG,
-      'PREREQUISITE NOT MET: window.electron IPC bridge is unavailable.',
-      'This plugin requires draw.io Desktop with the confluenceUpload IPC patch applied.',
-      'File not uploaded:', filename
-    );
-    callback(new Error(
-      'window.electron IPC bridge not found. ' +
-      'This plugin requires draw.io Desktop with the confluenceUpload IPC patch applied.'
-    ));
-    return;
-  }
 
   var resolvedType = contentType || 'image/png';
   var url  = cfg.baseUrl + '/wiki/rest/api/content/' + pageId + '/child/attachment';
-  var auth = btoa(cfg.email + ':' + cfg.apiToken);
+  var auth = 'Basic ' + btoa(cfg.email + ':' + cfg.apiToken);
 
-  // Non-image uploads require the IPC handler to forward the contentType field.
-  // If the handler hard-codes 'image/png', JSON will be stored with the wrong
-  // MIME type. This warning makes the requirement visible in the DevTools console.
-  if (resolvedType !== 'image/png') {
-    console.warn(
-      LOG,
-      'PREREQUISITE CHECK: Uploading "' + filename + '" with contentType="' + resolvedType + '".',
-      'The confluenceUpload IPC handler must pass the `contentType` field from the payload',
-      'to the multipart request — otherwise this file will be stored as image/png in Confluence.',
-      'If the attachment appears with the wrong type, apply the IPC patch described in docs/specs.md.'
-    );
-  }
+  var binary = atob(base64);
+  var bytes  = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+  var blob     = new Blob([bytes], { type: resolvedType });
+  var formData = new FormData();
+  formData.append('file', blob, filename);
 
-  console.log(LOG, 'Uploading "' + filename + '" (contentType=' + resolvedType + ') → page ' + pageId);
+  console.log(LOG, 'Uploading "' + filename + '" (' + resolvedType + ') → page ' + pageId);
 
-  window.electron.request(
-    {
-      action      : 'confluenceUpload',
-      url         : url,
-      auth        : auth,
-      filename    : filename,
-      imageBase64 : base64,
-      contentType : resolvedType,
+  fetch(url, {
+    method:  'POST',
+    headers: {
+      'Authorization':     auth,
+      'X-Atlassian-Token': 'no-check',
     },
-    function(ret) {
-      var status = (ret && ret.statusCode) ? ret.statusCode : 0;
-      if (status >= 200 && status < 300) {
-        console.log(LOG, 'Upload OK — "' + filename + '" HTTP ' + status);
-        callback(null, status);
-      } else {
-        var msg = 'HTTP ' + status;
-        if (ret && ret.body) {
-          try {
-            var parsed = JSON.parse(ret.body);
-            if (parsed.message) { msg += ': ' + parsed.message; }
-          } catch (e) {
-            if (typeof ret.body === 'string' && ret.body.length < 200) { msg += ': ' + ret.body; }
-          }
+    body: formData,
+  })
+  .then(function(response) {
+    if (response.ok) {
+      console.log(LOG, 'Upload OK — "' + filename + '" HTTP ' + response.status);
+      callback(null, response.status);
+    } else {
+      return response.text().then(function(body) {
+        var msg = 'HTTP ' + response.status;
+        try {
+          var parsed = JSON.parse(body);
+          if (parsed.message) { msg += ': ' + parsed.message; }
+        } catch (e) {
+          if (body && body.length < 200) { msg += ': ' + body.trim(); }
         }
         console.error(LOG, 'Upload FAILED — "' + filename + '":', msg);
         callback(new Error(msg));
-      }
-    },
-    function(err) {
-      console.error(LOG, 'Upload FAILED — "' + filename + '":', err);
-      callback(new Error(String(err || 'IPC upload failed')));
+      });
     }
-  );
+  })
+  .catch(function(err) {
+    var msg = err && err.message ? err.message : String(err);
+    console.error(LOG, 'Network error uploading "' + filename + '":', msg);
+    callback(new Error('Network error: ' + msg));
+  });
 };
 
 module.exports = ConfluenceUploader;
