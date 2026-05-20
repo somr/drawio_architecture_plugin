@@ -126,9 +126,23 @@ ConfluenceUploader.prototype.upload = function(pageId, filename, base64, content
       contentType : resolvedType,
     },
     function(ret) {
-      var status = (ret && ret.statusCode) ? ret.statusCode : '(no status)';
-      console.log(LOG, 'Upload OK — "' + filename + '" HTTP ' + status);
-      callback(null, status);
+      var status = (ret && ret.statusCode) ? ret.statusCode : 0;
+      if (status >= 200 && status < 300) {
+        console.log(LOG, 'Upload OK — "' + filename + '" HTTP ' + status);
+        callback(null, status);
+      } else {
+        var msg = 'HTTP ' + status;
+        if (ret && ret.body) {
+          try {
+            var parsed = JSON.parse(ret.body);
+            if (parsed.message) { msg += ': ' + parsed.message; }
+          } catch (e) {
+            if (typeof ret.body === 'string' && ret.body.length < 200) { msg += ': ' + ret.body; }
+          }
+        }
+        console.error(LOG, 'Upload FAILED — "' + filename + '":', msg);
+        callback(new Error(msg));
+      }
     },
     function(err) {
       console.error(LOG, 'Upload FAILED — "' + filename + '":', err);
