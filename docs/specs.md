@@ -447,10 +447,13 @@ The push button is disabled (grey) when credentials are not configured or there 
 
 ### 11.5 Upload mechanism
 
-Uploads use the Node.js `https` module (`require('https')`) rather than `fetch()` or the DrawIO Electron IPC bridge. This is necessary because:
-- DrawIO Desktop's Content Security Policy blocks `fetch()`/XHR to non-whitelisted domains (including `*.atlassian.net`).
-- The DrawIO `confluenceUpload` IPC action uses DrawIO's own managed Confluence session rather than the credentials we supply.
-- Node.js `https` runs outside the browser security context and is not subject to CSP.
+Uploads route through a custom `httpRequest` IPC action added to the DrawIO Desktop main process (`src/main/electron.js`). This is necessary because:
+- DrawIO Desktop's CSP blocks `fetch()`/XHR to non-whitelisted domains (including `*.atlassian.net`).
+- The built-in DrawIO `confluenceUpload` IPC action does not exist in this build.
+- Node.js `https` is not available in the renderer (`nodeIntegration: false`).
+- The main process is not subject to CSP and can make arbitrary outbound HTTPS requests.
+
+The renderer builds the `multipart/form-data` body (preamble + file bytes + epilogue), base64-encodes it for IPC transport, and sends it via `window.electron.request`. The main process decodes it back to a `Buffer` and sends the raw bytes.
 
 | Request detail | Value |
 |----------------|-------|
@@ -458,7 +461,9 @@ Uploads use the Node.js `https` module (`require('https')`) rather than `fetch()
 | URL | `{baseUrl}/wiki/rest/api/content/{pageId}/child/attachment` |
 | `Authorization` header | `Basic {base64({email}:{apiToken})}` |
 | `X-Atlassian-Token` header | `no-check` (required by Confluence to bypass CSRF protection) |
-| Body | `multipart/form-data` built manually with `Buffer` (no `FormData` in Node context) |
+| Body | `multipart/form-data` assembled in the renderer, transported as base64 over IPC |
+
+**Prerequisite:** The `httpRequest` case must be present in the `rendererReq` switch in `drawio-desktop/src/main/electron.js`, and DrawIO Desktop must be rebuilt from source.
 
 ### 11.6 Error conditions (Confluence push)
 
