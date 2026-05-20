@@ -73,9 +73,9 @@ ConfluenceUploader.prototype.getPages = function() {
 var LOG = '[ConfluenceUploader]';
 
 // Uploads a single file to a Confluence page as an attachment.
-// Uses fetch() with Basic auth so credentials are always ours, independent
-// of any DrawIO-managed Confluence session. X-Atlassian-Token is required
-// by the Confluence REST API to bypass its CSRF protection on POST requests.
+// Uses Node.js https directly to bypass Electron's CSP (fetch/XHR are
+// blocked by connect-src). X-Atlassian-Token is required by Confluence
+// to bypass its CSRF protection on POST requests.
 ConfluenceUploader.prototype.upload = function(pageId, filename, base64, contentType, callback) {
   var cfg = this._config;
   if (!cfg) {
@@ -84,50 +84,73 @@ ConfluenceUploader.prototype.upload = function(pageId, filename, base64, content
     return;
   }
 
+  var https;
+  try { https = require('https'); } catch (e) {
+    callback(new Error('Node.js https module not available: ' + e.message));
+    return;
+  }
+
   var resolvedType = contentType || 'image/png';
-  var url  = cfg.baseUrl + '/wiki/rest/api/content/' + pageId + '/child/attachment';
-  var auth = 'Basic ' + btoa(cfg.email + ':' + cfg.apiToken);
+  var parsedUrl    = new URL(cfg.baseUrl + '/wiki/rest/api/content/' + pageId + '/child/attachment');
+  var authHeader   = 'Basic ' + Buffer.from(cfg.email + ':' + cfg.apiToken).toString('base64');
 
-  var binary = atob(base64);
-  var bytes  = new Uint8Array(binary.length);
-  for (var i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
-  var blob     = new Blob([bytes], { type: resolvedType });
-  var formData = new FormData();
-  formData.append('file', blob, filename);
+  // Build multipart/form-data body manually — no FormData in Node.js context
+  var boundary  = '----PluginBoundary' + Date.now().toString(36);
+  var binBuffer = Buffer.from(base64, 'base64');
+  var body      = Buffer.concat([
+    Buffer.from(
+      '--' + boundary + '\r\n' +
+      'Content-Disposition: form-data; name="file"; filename="' + filename + '"\r\n' +
+      'Content-Type: ' + resolvedType + '\r\n\r\n'
+    ),
+    binBuffer,
+    Buffer.from('\r\n--' + boundary + '--\r\n'),
+  ]);
 
-  console.log(LOG, 'Uploading "' + filename + '" (' + resolvedType + ') → page ' + pageId);
-
-  fetch(url, {
-    method:  'POST',
-    headers: {
-      'Authorization':     auth,
+  var options = {
+    hostname: parsedUrl.hostname,
+    port:     parseInt(parsedUrl.port || '443', 10),
+    path:     parsedUrl.pathname + parsedUrl.search,
+    method:   'POST',
+    headers:  {
+      'Authorization':     authHeader,
       'X-Atlassian-Token': 'no-check',
+      'Content-Type':      'multipart/form-data; boundary=' + boundary,
+      'Content-Length':    body.length,
     },
-    body: formData,
-  })
-  .then(function(response) {
-    if (response.ok) {
-      console.log(LOG, 'Upload OK — "' + filename + '" HTTP ' + response.status);
-      callback(null, response.status);
-    } else {
-      return response.text().then(function(body) {
-        var msg = 'HTTP ' + response.status;
+  };
+
+  console.log(LOG, 'Uploading "' + filename + '" (' + resolvedType + ') → ' + parsedUrl.hostname + ' page ' + pageId);
+
+  var req = https.request(options, function(res) {
+    var chunks = [];
+    res.on('data', function(c) { chunks.push(c); });
+    res.on('end', function() {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        console.log(LOG, 'Upload OK — "' + filename + '" HTTP ' + res.statusCode);
+        callback(null, res.statusCode);
+      } else {
+        var resBody = Buffer.concat(chunks).toString('utf8');
+        var msg     = 'HTTP ' + res.statusCode;
         try {
-          var parsed = JSON.parse(body);
+          var parsed = JSON.parse(resBody);
           if (parsed.message) { msg += ': ' + parsed.message; }
         } catch (e) {
-          if (body && body.length < 200) { msg += ': ' + body.trim(); }
+          if (resBody && resBody.length < 200) { msg += ': ' + resBody.trim(); }
         }
         console.error(LOG, 'Upload FAILED — "' + filename + '":', msg);
         callback(new Error(msg));
-      });
-    }
-  })
-  .catch(function(err) {
-    var msg = err && err.message ? err.message : String(err);
-    console.error(LOG, 'Network error uploading "' + filename + '":', msg);
-    callback(new Error('Network error: ' + msg));
+      }
+    });
   });
+
+  req.on('error', function(err) {
+    console.error(LOG, 'Network error uploading "' + filename + '":', err.message);
+    callback(new Error('Network error: ' + err.message));
+  });
+
+  req.write(body);
+  req.end();
 };
 
 module.exports = ConfluenceUploader;

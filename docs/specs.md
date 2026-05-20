@@ -447,7 +447,10 @@ The push button is disabled (grey) when credentials are not configured or there 
 
 ### 11.5 Upload mechanism
 
-Uploads use `fetch()` directly with HTTP Basic auth, bypassing the DrawIO Electron IPC bridge. This ensures the plugin's own stored credentials are always used regardless of any DrawIO-managed Confluence session.
+Uploads use the Node.js `https` module (`require('https')`) rather than `fetch()` or the DrawIO Electron IPC bridge. This is necessary because:
+- DrawIO Desktop's Content Security Policy blocks `fetch()`/XHR to non-whitelisted domains (including `*.atlassian.net`).
+- The DrawIO `confluenceUpload` IPC action uses DrawIO's own managed Confluence session rather than the credentials we supply.
+- Node.js `https` runs outside the browser security context and is not subject to CSP.
 
 | Request detail | Value |
 |----------------|-------|
@@ -455,7 +458,7 @@ Uploads use `fetch()` directly with HTTP Basic auth, bypassing the DrawIO Electr
 | URL | `{baseUrl}/wiki/rest/api/content/{pageId}/child/attachment` |
 | `Authorization` header | `Basic {base64({email}:{apiToken})}` |
 | `X-Atlassian-Token` header | `no-check` (required by Confluence to bypass CSRF protection) |
-| Body | `multipart/form-data` with a single `file` field |
+| Body | `multipart/form-data` built manually with `Buffer` (no `FormData` in Node context) |
 
 ### 11.6 Error conditions (Confluence push)
 
