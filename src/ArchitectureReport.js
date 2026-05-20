@@ -70,26 +70,26 @@ ArchitectureReport.prototype.generate = function() {
 function _buildJson(sp, graph, eligibleCells, pageName) {
   var eligibleIds = {};
   eligibleCells.forEach(function(c) { eligibleIds[c.id] = true; });
-  var emitted = {};
 
-  var hierarchy = [];
-  eligibleCells.forEach(function(cell) {
-    if (!emitted[cell.id] && sp.getProperty(cell, sp.PROP_LEVEL) === 'Organization') {
-      hierarchy.push(_buildJsonSubtree(cell, graph, sp, eligibleIds, emitted));
-    }
+  // Root nodes: eligible cells whose draw.io parent is not itself eligible.
+  // Building subtrees only from roots guarantees every shape appears exactly
+  // once and is nested under its correct eligible ancestor.
+  var rootNodes = eligibleCells.filter(function(cell) {
+    var parent = graph.model.getParent(cell);
+    return !parent || !eligibleIds[parent.id];
   });
 
-  var uncategorised = eligibleCells
-    .filter(function(c) { return !emitted[c.id]; })
-    .sort(function(a, b) {
-      var la = sp.getProperty(a, sp.PROP_LEVEL) || '';
-      var lb = sp.getProperty(b, sp.PROP_LEVEL) || '';
-      return (LEVEL_ORDER[la] !== undefined ? LEVEL_ORDER[la] : 99) -
-             (LEVEL_ORDER[lb] !== undefined ? LEVEL_ORDER[lb] : 99);
-    })
-    .map(function(cell) {
-      return _buildJsonSubtree(cell, graph, sp, eligibleIds, emitted);
-    });
+  rootNodes.sort(function(a, b) {
+    var la = sp.getProperty(a, sp.PROP_LEVEL) || '';
+    var lb = sp.getProperty(b, sp.PROP_LEVEL) || '';
+    return (LEVEL_ORDER[la] !== undefined ? LEVEL_ORDER[la] : 99) -
+           (LEVEL_ORDER[lb] !== undefined ? LEVEL_ORDER[lb] : 99);
+  });
+
+  var emitted = {};
+  var nodes = rootNodes.map(function(cell) {
+    return _buildJsonSubtree(cell, graph, sp, eligibleIds, emitted);
+  });
 
   var connectors = _collectConnectors(graph, sp);
 
@@ -97,11 +97,10 @@ function _buildJson(sp, graph, eligibleCells, pageName) {
   var generated = today.getFullYear() + '-' + _pad2(today.getMonth() + 1) + '-' + _pad2(today.getDate());
 
   return {
-    page:          pageName,
-    generated:     generated,
-    hierarchy:     hierarchy,
-    uncategorised: uncategorised,
-    connectors:    connectors,
+    page:       pageName,
+    generated:  generated,
+    nodes:      nodes,
+    connectors: connectors,
   };
 }
 
@@ -174,9 +173,13 @@ function _exportPng(ui, path, callback) {
         try {
           var dataUrl = canvas.toDataURL('image/png');
           var base64  = dataUrl.substring(dataUrl.indexOf(',') + 1);
+          if (!path) {
+            callback(null, base64);
+            return;
+          }
           window.electron.request(
             { action: 'writeFile', path: path, data: base64, enc: 'base64' },
-            function()    { callback(null); },
+            function()    { callback(null, base64); },
             function(err) { callback(String(err || 'write failed')); }
           );
         } catch (e) {
@@ -225,5 +228,93 @@ function _sanitize(str) {
     .replace(/[^a-z0-9\-]/g, '')
     .substring(0, 64) || 'unnamed';
 }
+
+// Pushes the current page's PNG and JSON to every valid Confluence page listed
+// in the diagram's confluence_page property, without writing anything to disk.
+// onProgress(index, total, pageUrl, result) fires after each page is done.
+// onDone(errString) or onDone(null, results) fires when all pages are finished.
+ArchitectureReport.prototype.push = function(cfUploader, onProgress, onDone) {
+  var ui = this.ui;
+  var sp = this.shapeProps;
+
+  var file = ui.getCurrentFile();
+  if (!file || !file.fileObject || !file.fileObject.path) {
+    onDone('Save the diagram before pushing to Confluence.');
+    return;
+  }
+
+  var diagName    = _sanitize((file.fileObject.name || 'diagram').replace(/\.[^.]+$/, ''));
+  var page        = ui.currentPage;
+  var pageName    = page
+    ? (page.getName ? page.getName() : (page.name || 'page'))
+    : 'page';
+  var base         = diagName + '_' + _sanitize(pageName);
+  var pngFilename  = base + '.png';
+  var jsonFilename = base + '.json';
+
+  var graph         = ui.editor.graph;
+  var eligibleCells = _collectEligible(graph, sp);
+
+  if (eligibleCells.length === 0) {
+    onDone('No shapes with Name and Level found on this page.');
+    return;
+  }
+
+  var pages = cfUploader.getPages();
+  if (pages.valid.length === 0) {
+    onDone(pages.invalid.length > 0
+      ? 'confluence_page is set but contains no valid /pages/{id}/ URLs.'
+      : 'confluence_page property is not set on this diagram.');
+    return;
+  }
+
+  var jsonStr    = JSON.stringify(_buildJson(sp, graph, eligibleCells, pageName), null, 2);
+  var jsonBase64 = btoa(unescape(encodeURIComponent(jsonStr)));
+
+  _exportPng(ui, null, function(pngErr, pngBase64) {
+    if (pngErr) {
+      onDone('PNG export failed: ' + pngErr);
+      return;
+    }
+
+    var results = [];
+
+    function uploadPage(index) {
+      if (index >= pages.valid.length) {
+        onDone(null, results);
+        return;
+      }
+      var url   = pages.valid[index];
+      var match = url.match(/\/pages\/(\d+)/);
+      if (!match) {
+        results.push({ url: url, ok: false, error: 'Cannot extract page ID' });
+        onProgress(index, pages.valid.length, url, results[results.length - 1]);
+        uploadPage(index + 1);
+        return;
+      }
+      var pageId = match[1];
+
+      cfUploader.upload(pageId, pngFilename, pngBase64, 'image/png', function(pngUploadErr) {
+        if (pngUploadErr) {
+          results.push({ url: url, ok: false, error: 'PNG: ' + pngUploadErr.message });
+          onProgress(index, pages.valid.length, url, results[results.length - 1]);
+          uploadPage(index + 1);
+          return;
+        }
+        cfUploader.upload(pageId, jsonFilename, jsonBase64, 'application/json', function(jsonUploadErr) {
+          if (jsonUploadErr) {
+            results.push({ url: url, ok: false, error: 'JSON: ' + jsonUploadErr.message });
+          } else {
+            results.push({ url: url, ok: true });
+          }
+          onProgress(index, pages.valid.length, url, results[results.length - 1]);
+          uploadPage(index + 1);
+        });
+      });
+    }
+
+    uploadPage(0);
+  });
+};
 
 module.exports = ArchitectureReport;

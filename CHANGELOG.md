@@ -4,6 +4,16 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.9] — 2026-05-20
+
+### Added
+- **Confluence push** — a new *Confluence* section in the Properties tab lets users push the current page's PNG and JSON exports directly to one or more Confluence pages as attachments, without writing files to disk. Target pages are declared via a `confluence_page` diagram property (one Confluence page URL per line, must contain `/pages/{id}/`). Credentials (base URL, email, API token) are stored in `localStorage` and managed via a collapsible form in the panel. The push button is disabled until both credentials and at least one valid target page are configured. Progress and per-page results are shown inline.
+
+### Changed
+- **JSON export: `nodes` replaces `hierarchy` + `uncategorised`** *(breaking change for v1.8 consumers)* — the top-level JSON document now has a single `nodes` array instead of separate `hierarchy` and `uncategorised` arrays. A root node is any eligible shape whose draw.io parent is not itself eligible; root nodes are sorted by level depth and their subtrees are nested recursively. Every eligible shape appears exactly once.
+
+---
+
 ## [1.8] — 2026-05-11
 
 ### Changed
@@ -17,8 +27,8 @@ The exported JSON document has five top-level fields:
 |-------|-------------|
 | `page` | Page name as shown in the DrawIO tab. |
 | `generated` | Export date in `YYYY-MM-DD` format. |
-| `hierarchy` | Array of Organisation-rooted shape trees (see shape node below). |
-| `uncategorised` | Eligible shapes not inside any Organisation, sorted by level depth. |
+| `hierarchy` | Array of Organisation-rooted shape trees (see shape node below). *(replaced by `nodes` in v1.9)* |
+| `uncategorised` | Eligible shapes not inside any Organisation, sorted by level depth. *(replaced by `nodes` in v1.9)* |
 | `connectors` | Named, non-ignored connectors (see connector entry below). |
 
 **Shape node** (used in both `hierarchy` and `uncategorised`, recursively):

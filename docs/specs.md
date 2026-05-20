@@ -286,13 +286,12 @@ A connector is included in the connectors list if:
 |-------|------|-------------|
 | `page` | string | Raw page name as shown in the DrawIO tab. |
 | `generated` | string | Local date of export in `YYYY-MM-DD` format. |
-| `hierarchy` | array of shape nodes | Eligible Organisation shapes and their full subtrees. Empty array if none. |
-| `uncategorised` | array of shape nodes | Eligible shapes not reached via any Organisation, sorted by level depth. Empty array if none. |
+| `nodes` | array of shape nodes | All eligible root nodes and their full subtrees, sorted by level depth. A root node is an eligible shape whose draw.io parent is not itself eligible. Empty array if none. |
 | `connectors` | array of connector entries | Named, non-ignored connectors. Empty array if none. |
 
 #### 10.5.2 Shape node
 
-Appears in both `hierarchy` and `uncategorised`. Children of a shape are nested recursively.
+Appears in `nodes`. Children of a shape are nested recursively.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
@@ -336,7 +335,7 @@ Used for `source` and `target` inside a connector entry.
 {
   "page": "Cloud Infrastructure",
   "generated": "2026-05-11",
-  "hierarchy": [
+  "nodes": [
     {
       "name": "Acme Corp",
       "level": "Organization",
@@ -363,9 +362,7 @@ Used for `source` and `target` inside a connector entry.
           ]
         }
       ]
-    }
-  ],
-  "uncategorised": [
+    },
     {
       "name": "Legacy DB",
       "level": "Node",
@@ -390,17 +387,17 @@ Used for `source` and `target` inside a connector entry.
 }
 ```
 
-In the example, `"DB read"` has an anonymous target because the connected shape has no `prop_name`. `"Legacy DB"` appears in `uncategorised` because it is not contained within any Organisation node.
+In the example, `"DB read"` has an anonymous target because the connected shape has no `prop_name`. `"Legacy DB"` appears in `nodes` alongside `"Acme Corp"` because its draw.io parent is not an eligible shape.
 
 ### 10.6 Hierarchy traversal
 
-The export uses the **mxGraph model hierarchy** (actual parent-child container relationships). All eligible Organisation shapes are emitted first with their full subtrees. Any eligible shape not reached through an Organisation is placed in `uncategorised`, sorted by level depth, with its own model children still nested below it.
+The export uses the **mxGraph model hierarchy** (actual parent-child container relationships). A **root node** is an eligible shape whose draw.io parent is not itself eligible (i.e. the parent has no `prop_name` + `prop_level`, or is ignored). All root nodes are collected, sorted by level depth, and emitted as top-level entries in `nodes`, each with its eligible descendants nested recursively. Every eligible shape appears exactly once.
 
 ### 10.7 PNG export
 
 The PNG is exported first via DrawIO's `editor.exportToCanvas()` API, covering the complete page content (not just the visible viewport). White background (`#ffffff`). The binary data is written via the Electron IPC `writeFile` action with `enc: 'base64'`. The JSON file is written only after the PNG succeeds.
 
-### 10.8 Error conditions
+### 10.8 Error conditions (disk export)
 
 | Condition | Behaviour |
 |-----------|-----------|
@@ -411,7 +408,73 @@ The PNG is exported first via DrawIO's `editor.exportToCanvas()` API, covering t
 
 ---
 
-## 11. General Error Handling
+## 11. Confluence Push
+
+### 11.1 Overview
+
+The Properties tab contains a **Confluence** section below the Export button. It lets the user push the current page's PNG and JSON exports directly to one or more Confluence pages as attachments, without writing any files to disk.
+
+### 11.2 Target pages
+
+Target Confluence pages are declared on the diagram itself via a `confluence_page` diagram property (right-click diagram background → Edit Data → add `confluence_page`). The value is one URL per line. A URL is **valid** if it contains `/pages/{id}/` where `{id}` is a numeric page ID; any other line is **invalid** and shown as a warning.
+
+The Confluence section displays the list of valid target page URLs as clickable links (opens in browser) and flags invalid entries.
+
+### 11.3 Credentials
+
+Confluence API credentials are stored in `localStorage` under the key `confluence_plugin_config`. The stored object contains:
+
+| Field | Description |
+|-------|-------------|
+| `baseUrl` | Confluence Cloud base URL, e.g. `https://company.atlassian.net` (trailing slashes stripped). |
+| `email` | Atlassian account email address. |
+| `apiToken` | Atlassian API token. |
+
+The credentials form is revealed by clicking the `⚙` toggle below the push button. Save and Clear buttons manage the stored config. All three fields are required to save.
+
+### 11.4 Push behaviour
+
+Clicking **Push to Confluence** triggers the following sequence:
+
+1. PNG is rendered in-memory via `editor.exportToCanvas()` (same as disk export but no file is written).
+2. For each valid target page URL (in order):
+   a. Upload `{diagramname}_{pagename}.png` with `contentType: image/png`.
+   b. Upload `{diagramname}_{pagename}.json` with `contentType: application/json`.
+3. `onProgress` fires after each page completes (success or failure).
+4. When all pages are done, the status area shows a per-page result line: `✓ {page title}` on success, `✗ {page title}: {reason}` on failure.
+
+The push button is disabled (grey) when credentials are not configured or there are no valid target page URLs.
+
+### 11.5 Upload IPC contract
+
+Uploads are performed via the DrawIO Electron IPC bridge (`window.electron.request`) with action `confluenceUpload`. The payload fields are:
+
+| Field | Value |
+|-------|-------|
+| `action` | `"confluenceUpload"` |
+| `url` | `{baseUrl}/wiki/rest/api/content/{pageId}/child/attachment` |
+| `auth` | Base-64 encoded `{email}:{apiToken}` |
+| `filename` | Attachment filename |
+| `imageBase64` | Base-64 encoded file content |
+| `contentType` | MIME type (`image/png` or `application/json`) |
+
+**Prerequisite:** The DrawIO Desktop Electron IPC handler for `confluenceUpload` must forward the `contentType` field to the multipart request. If the handler hard-codes `image/png`, the JSON attachment will be stored with the wrong MIME type. The plugin logs a console warning when uploading non-PNG content.
+
+### 11.6 Error conditions (Confluence push)
+
+| Condition | Behaviour |
+|-----------|-----------|
+| Credentials not configured | Credentials form expanded; status: "Enter credentials above." |
+| Diagram not yet saved to disk | Status: "Save the diagram before pushing to Confluence." |
+| No eligible shapes on current page | Status: "No shapes with Name and Level found on this page." |
+| No valid target page URLs | Status message describing whether `confluence_page` is absent or only contains invalid URLs. |
+| PNG export failure | Status: "PNG export failed: {reason}." |
+| Per-page upload failure | Per-page `✗` line with the error from the IPC layer. Other pages continue. |
+| `window.electron` not available | Upload callback receives error: "window.electron IPC bridge not found…" |
+
+---
+
+## 12. General Error Handling
 
 All errors are surfaced to the user via a `mxUtils.alert()` dialog. No operation leaves the diagram in a partial or inconsistent state — transactions are always completed or not started.
 
@@ -425,7 +488,7 @@ All errors are surfaced to the user via a `mxUtils.alert()` dialog. No operation
 
 ---
 
-## 12. Cross-platform Compatibility
+## 13. Cross-platform Compatibility
 
 - The plugin must function identically on DrawIO desktop for Linux and Windows.
 - No OS-specific APIs may be used.
@@ -434,24 +497,24 @@ All errors are surfaced to the user via a `mxUtils.alert()` dialog. No operation
 
 ---
 
-## 13. Tags
+## 14. Tags
 
-### 13.1 Property storage
+### 14.1 Property storage
 
 Shapes and connectors (edges) may each carry an optional `prop_tags` property — a
 comma-separated string of arbitrary tag names (e.g. `"team-a,security,core"`). Tags are
 case-sensitive and trimmed of leading/trailing whitespace when read.
 
-### 13.2 Tags tab
+### 14.2 Tags tab
 
 The panel is split into two tabs:
 
 | Tab | Content |
 |-----|---------|
 | **Properties** | Shape mode: Parent, Name, Level, Description, Adopt Children, Connected shapes, Also in..., Export architecture JSON button. Connector mode: Name, Description, Connects section. |
-| **Tags** | Tags field for the selected cell; Highlight section (see section 14). |
+| **Tags** | Tags field for the selected cell; Highlight section (see section 15). |
 
-### 13.3 Tags field
+### 14.3 Tags field
 
 The Tags field is a single-line text input in the Tags tab showing a comma-separated list of
 the selected cell's tags.
@@ -466,7 +529,7 @@ the selected cell's tags.
 The field saves on blur via `ShapeProperties.setTags()`. An empty field removes the `prop_tags`
 attribute from the cell.
 
-### 13.4 Connector selection
+### 14.4 Connector selection
 
 When a single connector is selected, the panel switches to the **Properties tab** (not the Tags
 tab) and activates Name and Description fields for the connector. The Tags tab remains accessible
@@ -474,22 +537,22 @@ and editable. Selecting a shape also keeps the Properties tab active.
 
 ---
 
-## 14. Tag Highlight
+## 15. Tag Highlight
 
-### 14.1 Overview
+### 15.1 Overview
 
 The Highlight section is always visible in the Tags tab. It lets the user select a tag from a
 dropdown and visually emphasise all shapes and connectors that carry that tag, de-emphasising
 everything else.
 
-### 14.2 Highlight dropdown
+### 15.2 Highlight dropdown
 
 The dropdown lists all unique tag values found on any vertex or edge in the current page,
 sorted alphabetically. If no tags are defined, the dropdown shows `(no tags defined)` with
 the placeholder option disabled. The dropdown is refreshed whenever the Tags tab becomes active
 and whenever tags are saved on a cell.
 
-### 14.3 Activate
+### 15.3 Activate
 
 Clicking **Activate** with a tag selected:
 
@@ -504,7 +567,7 @@ Clicking **Activate** with a tag selected:
 
 The operation is undoable (Ctrl+Z restores original styles as one step).
 
-### 14.4 Style constants
+### 15.4 Style constants
 
 Style override keys and their placeholder values (defined in `src/TagHighlight.js`; change there
 to adjust the visual appearance):
@@ -516,19 +579,19 @@ to adjust the visual appearance):
 | `HIGHLIGHT_EDGE` | Highlighted connectors | `strokeColor`, `strokeWidth` |
 | `DEEMPH_EDGE` | De-emphasised connectors | `strokeColor`, `strokeWidth`, `opacity` |
 
-### 14.5 Clear
+### 15.5 Clear
 
 Clicking **Clear** restores all original styles from the stored snapshot in one undoable
 transaction and deactivates the highlight.
 
-### 14.6 Persistence
+### 15.6 Persistence
 
 Highlight is applied via `graph.model.setStyle()` and therefore marks the file as having
 unsaved changes. The user should click **Clear** before saving to avoid saving highlight styles
 to the `.drawio` file. When a new file is opened (`fileLoaded`), the plugin resets its
 internal highlight state automatically without touching the model.
 
-### 14.7 Scope
+### 15.7 Scope
 
 The highlight operates on the current page only. Switching pages or opening a new file resets
 the internal state. There is no multi-tag simultaneous highlight; only one tag can be active
@@ -536,7 +599,7 @@ at a time.
 
 ---
 
-## 15. Out of Scope
+## 16. Out of Scope
 
 - Bulk editing across multiple shapes.
 - Custom property field definitions (Name/Level/Description are fixed).

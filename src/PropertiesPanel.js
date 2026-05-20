@@ -1,9 +1,10 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.8';
+var PLUGIN_VERSION = '1.9';
 
-var ArchitectureReport = require('./ArchitectureReport');
-var TagHighlight       = require('./TagHighlight');
+var ArchitectureReport  = require('./ArchitectureReport');
+var TagHighlight        = require('./TagHighlight');
+var ConfluenceUploader  = require('./ConfluenceUploader');
 
 // Inline style strings applied to the Tags input field in its two states.
 // Using full cssText replacements avoids partial-override issues in Electron.
@@ -60,8 +61,19 @@ function PropertiesPanel(ui, shapeProps) {
   this.clearBtn = null;
 
   // Shared sub-objects
-  this.report = new ArchitectureReport(ui, shapeProps);
+  this.report       = new ArchitectureReport(ui, shapeProps);
   this.tagHighlight = new TagHighlight(ui, shapeProps);
+  this.cfUploader   = new ConfluenceUploader(ui);
+
+  // Confluence section UI refs
+  this.cfPagesLabel  = null;
+  this.cfPushBtn     = null;
+  this.cfPushStatus  = null;
+  this.cfCredsToggle = null;
+  this.cfCredsForm   = null;
+  this._cfInputBaseUrl = null;
+  this._cfInputEmail   = null;
+  this._cfInputToken   = null;
 
   // Tab state
   this._propertiesPane = null;
@@ -104,6 +116,7 @@ PropertiesPanel.prototype.init = function() {
   this._buildAlsoIn(propsPane);
   this._buildConnectorEndpoints(propsPane);
   this._buildReportButton(propsPane);
+  this._buildConfluenceSection(propsPane);
   contentArea.appendChild(propsPane);
   this._propertiesPane = propsPane;
 
@@ -148,6 +161,7 @@ PropertiesPanel.prototype.init = function() {
   this.window = win;
   this._switchTab('properties');
   this.setEmpty();
+  this._subscribeConfluenceUpdates();
 };
 
 // ---------------------------------------------------------------------------
@@ -982,6 +996,300 @@ PropertiesPanel.prototype._clearFields = function() {
   Object.keys(fields).forEach(function(key) {
     fields[key].value = '';
   });
+};
+
+// ---------------------------------------------------------------------------
+// Confluence section
+// ---------------------------------------------------------------------------
+
+PropertiesPanel.prototype._buildConfluenceSection = function(container) {
+  var self = this;
+
+  var sep = document.createElement('div');
+  sep.style.cssText = 'margin-top:12px;border-top:1px solid #ddd;padding-top:10px;';
+
+  var pageHeading = document.createElement('div');
+  pageHeading.textContent = 'Target page(s):';
+  pageHeading.style.cssText = 'font-weight:bold;margin-bottom:4px;font-size:11px;color:#444;';
+  sep.appendChild(pageHeading);
+
+  var pagesLabel = document.createElement('div');
+  pagesLabel.style.cssText = [
+    'font-size:10px',
+    'word-break:break-all',
+    'min-height:16px',
+    'background:#f4f5f7',
+    'border:1px solid #ddd',
+    'border-radius:3px',
+    'padding:4px 6px',
+    'margin-bottom:10px',
+    'color:#555',
+    'line-height:1.4',
+  ].join(';');
+  sep.appendChild(pagesLabel);
+  this.cfPagesLabel = pagesLabel;
+
+  var pushBtn = document.createElement('button');
+  pushBtn.textContent = 'Push to Confluence';
+  pushBtn.style.cssText = [
+    'padding:8px 12px',
+    'border:none',
+    'border-radius:4px',
+    'background:#0052cc',
+    'color:#fff',
+    'font-size:12px',
+    'font-weight:bold',
+    'cursor:pointer',
+    'width:100%',
+  ].join(';');
+  sep.appendChild(pushBtn);
+
+  var pushStatus = document.createElement('div');
+  pushStatus.style.cssText = 'font-size:11px;color:#555;margin-top:4px;min-height:14px;word-break:break-word;line-height:1.4;';
+  sep.appendChild(pushStatus);
+
+  var credsToggle = document.createElement('div');
+  credsToggle.style.cssText = 'font-size:10px;cursor:pointer;margin-top:6px;';
+  credsToggle.title = 'Click to show/hide credentials';
+  sep.appendChild(credsToggle);
+
+  var credsForm = document.createElement('div');
+  credsForm.style.cssText = 'display:none;margin-top:6px;';
+
+  var fieldStyle = [
+    'width:100%',
+    'box-sizing:border-box',
+    'font-size:10px',
+    'padding:3px 5px',
+    'margin-bottom:3px',
+    'border:1px solid #ccc',
+    'border-radius:3px',
+  ].join(';');
+
+  var inputBaseUrl = document.createElement('input');
+  inputBaseUrl.placeholder = 'https://company.atlassian.net';
+  inputBaseUrl.style.cssText = fieldStyle;
+  credsForm.appendChild(inputBaseUrl);
+
+  var inputEmail = document.createElement('input');
+  inputEmail.placeholder = 'you@company.com';
+  inputEmail.style.cssText = fieldStyle;
+  credsForm.appendChild(inputEmail);
+
+  var inputToken = document.createElement('input');
+  inputToken.type = 'password';
+  inputToken.placeholder = 'API token';
+  inputToken.style.cssText = fieldStyle;
+  credsForm.appendChild(inputToken);
+
+  var saveRow = document.createElement('div');
+  saveRow.style.cssText = 'display:flex;align-items:center;gap:6px;margin-top:4px;';
+
+  var saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Save';
+  saveBtn.style.cssText = 'font-size:10px;padding:3px 10px;background:#0052cc;color:#fff;border:none;border-radius:3px;cursor:pointer;';
+
+  var clearBtn = document.createElement('button');
+  clearBtn.textContent = 'Clear';
+  clearBtn.style.cssText = 'font-size:10px;padding:3px 10px;background:#888;color:#fff;border:none;border-radius:3px;cursor:pointer;';
+
+  var credsSaveStat = document.createElement('span');
+  credsSaveStat.style.cssText = 'font-size:10px;';
+
+  saveRow.appendChild(saveBtn);
+  saveRow.appendChild(clearBtn);
+  saveRow.appendChild(credsSaveStat);
+  credsForm.appendChild(saveRow);
+  sep.appendChild(credsForm);
+  container.appendChild(sep);
+
+  this.cfPushBtn      = pushBtn;
+  this.cfPushStatus   = pushStatus;
+  this.cfCredsToggle  = credsToggle;
+  this.cfCredsForm    = credsForm;
+  this._cfInputBaseUrl = inputBaseUrl;
+  this._cfInputEmail   = inputEmail;
+  this._cfInputToken   = inputToken;
+
+  credsToggle.addEventListener('click', function() {
+    var show = credsForm.style.display === 'none';
+    credsForm.style.display = show ? '' : 'none';
+    if (show) {
+      var cfg = self.cfUploader.getConfig();
+      if (cfg) {
+        inputBaseUrl.value = cfg.baseUrl  || '';
+        inputEmail.value   = cfg.email    || '';
+        inputToken.value   = cfg.apiToken || '';
+      }
+    }
+  });
+
+  saveBtn.addEventListener('click', function() {
+    try {
+      self.cfUploader.saveConfig({
+        baseUrl:  inputBaseUrl.value,
+        email:    inputEmail.value,
+        apiToken: inputToken.value,
+      });
+      credsSaveStat.textContent = 'Saved.';
+      credsSaveStat.style.color = '#238200';
+      self._updateConfluenceButton();
+    } catch (e) {
+      credsSaveStat.textContent = e.message || 'Error.';
+      credsSaveStat.style.color = '#cc0000';
+    }
+  });
+
+  clearBtn.addEventListener('click', function() {
+    self.cfUploader.clearConfig();
+    inputBaseUrl.value = inputEmail.value = inputToken.value = '';
+    credsSaveStat.textContent = 'Cleared.';
+    credsSaveStat.style.color = '#555';
+    self._updateConfluenceButton();
+  });
+
+  pushBtn.addEventListener('click', function() {
+    self._handleConfluencePush();
+  });
+
+  this._updateConfluenceButton();
+};
+
+PropertiesPanel.prototype._updateConfluenceButton = function() {
+  if (!this.cfPushBtn) return;
+  var cfg    = this.cfUploader.getConfig();
+  var pages  = this.cfUploader.getPages();
+  var active = !!(cfg && pages.valid.length > 0);
+
+  this.cfPushBtn.disabled         = !active;
+  this.cfPushBtn.style.background = active ? '#0052cc' : '#b0b0b0';
+  this.cfPushBtn.style.cursor     = active ? 'pointer' : 'default';
+
+  if (cfg) {
+    this.cfCredsToggle.textContent = '⚙ ' + cfg.email;
+    this.cfCredsToggle.style.color = '#238200';
+  } else {
+    this.cfCredsToggle.textContent = '⚙ Confluence credentials (not set)';
+    this.cfCredsToggle.style.color = '#cc0000';
+  }
+
+  // Refresh target pages label
+  var label = this.cfPagesLabel;
+  while (label.firstChild) { label.removeChild(label.firstChild); }
+
+  if (!pages.valid.length && !pages.invalid.length) {
+    var notSet = document.createElement('span');
+    notSet.textContent = 'Not set — right-click background → Edit Data → add confluence_page';
+    notSet.style.color = '#888';
+    label.appendChild(notSet);
+  } else {
+    for (var vi = 0; vi < pages.valid.length; vi++) {
+      (function(url, isLast) {
+        var linkEl = document.createElement('span');
+        linkEl.textContent = url;
+        linkEl.title = 'Click to open in browser';
+        linkEl.style.cssText = [
+          'display:block',
+          'color:#0052cc',
+          'cursor:pointer',
+          'text-decoration:underline',
+          'word-break:break-all',
+        ].join(';');
+        linkEl.addEventListener('click', function() {
+          if (window.electron && typeof window.electron.openExternal === 'function') {
+            window.electron.openExternal(url);
+          } else {
+            window.open(url, '_blank');
+          }
+        });
+        label.appendChild(linkEl);
+        if (!isLast) {
+          var hr = document.createElement('hr');
+          hr.style.cssText = 'border:none;border-top:1px solid #e0e0e0;margin:2px 0;';
+          label.appendChild(hr);
+        }
+      }(pages.valid[vi], vi === pages.valid.length - 1 && !pages.invalid.length));
+    }
+    for (var ii = 0; ii < pages.invalid.length; ii++) {
+      var warnEl = document.createElement('span');
+      warnEl.textContent = '⚠ Invalid (no /pages/{id}/): ' + pages.invalid[ii];
+      warnEl.style.cssText = 'display:block;color:#cc0000;word-break:break-all;font-size:9px;';
+      label.appendChild(warnEl);
+    }
+  }
+};
+
+PropertiesPanel.prototype._handleConfluencePush = function() {
+  var self = this;
+
+  while (this.cfPushStatus.firstChild) {
+    this.cfPushStatus.removeChild(this.cfPushStatus.firstChild);
+  }
+  this.cfPushStatus.style.color = '#555';
+
+  var cfg = this.cfUploader.getConfig();
+  if (!cfg) {
+    this.cfCredsForm.style.display = '';
+    this.cfPushStatus.textContent  = 'Enter credentials above.';
+    return;
+  }
+
+  this.cfPushBtn.disabled         = true;
+  this.cfPushBtn.style.background = '#b0b0b0';
+  this.cfPushBtn.style.cursor     = 'default';
+  this.cfPushStatus.textContent   = 'Exporting diagram…';
+
+  this.report.push(
+    this.cfUploader,
+    function onProgress(index, total) {
+      self.cfPushStatus.textContent = 'Uploading page ' + (index + 1) + ' of ' + total + '…';
+    },
+    function onDone(err, results) {
+      self._updateConfluenceButton();
+
+      while (self.cfPushStatus.firstChild) {
+        self.cfPushStatus.removeChild(self.cfPushStatus.firstChild);
+      }
+      self.cfPushStatus.style.color = '#555';
+
+      if (err) {
+        self.cfPushStatus.textContent = err;
+        self.cfPushStatus.style.color = '#cc0000';
+        return;
+      }
+
+      results.forEach(function(r) {
+        var line = document.createElement('div');
+        line.style.cssText = 'margin-bottom:2px;font-size:11px;';
+        var label = r.url;
+        var m = r.url.match(/\/pages\/\d+\/([^/?#]+)/);
+        if (m) { label = decodeURIComponent(m[1].replace(/\+/g, ' ')); }
+        if (r.ok) {
+          line.textContent = '✓ ' + label;
+          line.style.color = '#238200';
+        } else {
+          line.textContent = '✗ ' + label + ': ' + r.error;
+          line.style.color = '#cc0000';
+        }
+        self.cfPushStatus.appendChild(line);
+      });
+    }
+  );
+};
+
+PropertiesPanel.prototype._subscribeConfluenceUpdates = function() {
+  var self = this;
+  this.ui.editor.graph.getModel().addListener(mxEvent.CHANGE, function() {
+    self._updateConfluenceButton();
+  });
+  this.ui.editor.addListener('resetGraphView', function() {
+    self._updateConfluenceButton();
+  });
+  if (typeof this.ui.addListener === 'function') {
+    this.ui.addListener('pageSelected', function() {
+      self._updateConfluenceButton();
+    });
+  }
 };
 
 // ---------------------------------------------------------------------------
