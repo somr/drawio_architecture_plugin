@@ -1,6 +1,6 @@
 # DrawIO Properties Plugin — Application Specification
 
-Version: 1.8
+Version: 1.9.1
 Status: Approved
 
 ---

@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.8)
+# DrawIO Architecture Properties Plugin (v1.9.1)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 
@@ -59,8 +59,7 @@ When no shape is selected, a green **Export architecture JSON** button appears a
 |-------|-------------|
 | `page` | Page name as shown in the DrawIO tab. |
 | `generated` | Export date (`YYYY-MM-DD`). |
-| `hierarchy` | Array of Organisation-rooted shape trees. Each shape has `name`, `level`, `description` (null if blank), and `children` (nested eligible shapes). |
-| `uncategorised` | Eligible shapes not inside any Organisation, sorted by level depth. Same shape structure as `hierarchy`. |
+| `nodes` | All eligible root shapes and their full subtrees, nested recursively. A root node is an eligible shape whose draw.io parent is not itself eligible. Each shape has `name`, `level`, `description` (null if blank), and `children`. |
 | `connectors` | Named, non-ignored connectors. Each entry has `name`, `description` (null if blank), `source`, and `target`. |
 
 Connector endpoints (`source`/`target`) each carry `name` and `level`. If an endpoint shape is unnamed, ignored, or the connector is dangling, both fields show `"anonymous"` / `"undefined"` respectively.
@@ -70,6 +69,12 @@ Shapes must have both `prop_name` and `prop_level` to appear in the hierarchy. C
 #### Tags tab
 - **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur.
 - **Highlight section** — select any tag from the dropdown and click **Activate** to visually emphasise all shapes and connectors carrying that tag and de-emphasise everything else. Click **Clear** to restore original styles. The highlight is applied as an undoable operation.
+
+### Confluence push
+
+A **Confluence** section in the Properties tab lets users push the current page's PNG and JSON exports directly to one or more Confluence pages as attachments, without writing files to disk. Target pages are declared via a `confluence_page` diagram property (one URL per line, must contain `/pages/{id}/`). Credentials (base URL, email, API token) are stored in `localStorage` and managed via a collapsible settings form. Progress and per-page results are shown inline.
+
+> **Prerequisite:** requires a patched DrawIO Desktop build with the `httpRequest` IPC action (see `drawio-desktop` branch `dev`, commit `8c435ed`).
 
 ### Missing properties prompt
 When a shape or connector with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes require Name, Level, and Description; connectors require Name and Description only. Both shapes and connectors can be marked as *Ignored* to suppress the prompt permanently.
@@ -125,7 +130,8 @@ src/
   PropertiesPanel.js    Persistent mxWindow panel UI (Properties + Tags tabs)
   PropertiesDialog.js   Missing-properties modal dialog
   TagHighlight.js       Tag highlight engine — activate/clear/style merge
-  ArchitectureReport.js Architecture report generator (PNG + Markdown)
+  ArchitectureReport.js Architecture JSON + PNG export
+  ConfluenceUploader.js Confluence push — multipart upload via httpRequest IPC
 docs/
   specs.md              Full feature specification
 webpack.config.js       Build configuration
