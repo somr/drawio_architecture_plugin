@@ -14,7 +14,7 @@ function ArchitectureReport(ui, shapeProps) {
   this.shapeProps = shapeProps;
 }
 
-ArchitectureReport.prototype.generate = function() {
+ArchitectureReport.prototype.generate = function(tagName) {
   var ui = this.ui;
   var sp = this.shapeProps;
 
@@ -32,7 +32,7 @@ ArchitectureReport.prototype.generate = function() {
   var pageName     = page
     ? (page.getName ? page.getName() : (page.name || 'page'))
     : 'page';
-  var base         = diagName + '_' + _sanitize(pageName);
+  var base         = diagName + '_' + _sanitize(pageName) + (tagName ? '_' + _sanitize(tagName) : '');
   var jsonFilename = base + '.json';
   var jsonPath     = fileDir + sep + jsonFilename;
 
@@ -233,7 +233,7 @@ function _sanitize(str) {
 // in the diagram's confluence_page property, without writing anything to disk.
 // onProgress(index, total, pageUrl, result) fires after each page is done.
 // onDone(errString) or onDone(null, results) fires when all pages are finished.
-ArchitectureReport.prototype.push = function(cfUploader, onProgress, onDone) {
+ArchitectureReport.prototype.push = function(cfUploader, onProgress, onDone, tagName) {
   var ui = this.ui;
   var sp = this.shapeProps;
 
@@ -248,7 +248,7 @@ ArchitectureReport.prototype.push = function(cfUploader, onProgress, onDone) {
   var pageName    = page
     ? (page.getName ? page.getName() : (page.name || 'page'))
     : 'page';
-  var base         = diagName + '_' + _sanitize(pageName);
+  var base         = diagName + '_' + _sanitize(pageName) + (tagName ? '_' + _sanitize(tagName) : '');
   var pngFilename  = base + '.png';
   var jsonFilename = base + '.json';
 

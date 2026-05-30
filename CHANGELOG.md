@@ -4,6 +4,15 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.9.2] — 2026-05-30
+
+### Changed
+- **Tag-aware export filenames** — when a tag highlight is active at export time, the active tag name is appended to the base filename for both disk export and Confluence push: `{diagramname}_{pagename}_{tagname}.png/.json`. No change when no tag is active.
+- **De-emphasised connector labels** — when a tag highlight is active, connector labels on non-matching connectors now fade to light grey (`fontColor` added to `DEEMPH_EDGE`) so they no longer compete visually with highlighted content.
+- **De-emphasised connector lines made visible** — the de-emphasis opacity for connectors was raised from 40 to 60 and the stroke colour darkened slightly (`#BBBBBB`) so the connector line remains readable rather than nearly invisible.
+
+---
+
 ## [1.9.1] — 2026-05-20
 
 ### Fixed

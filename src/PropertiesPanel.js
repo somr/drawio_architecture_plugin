@@ -1,6 +1,6 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.9.1';
+var PLUGIN_VERSION = '1.9.2';
 
 var ArchitectureReport  = require('./ArchitectureReport');
 var TagHighlight        = require('./TagHighlight');
@@ -830,7 +830,7 @@ PropertiesPanel.prototype._buildReportButton = function(container) {
   ].join(';');
 
   btn.addEventListener('click', function() {
-    self.report.generate();
+    self.report.generate(self.tagHighlight.activeTag || null);
   });
 
   container.appendChild(btn);
@@ -1273,7 +1273,8 @@ PropertiesPanel.prototype._handleConfluencePush = function() {
         }
         self.cfPushStatus.appendChild(line);
       });
-    }
+    },
+    this.tagHighlight.activeTag || null
   );
 };
 

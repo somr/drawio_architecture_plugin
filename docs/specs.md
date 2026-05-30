@@ -1,6 +1,6 @@
 # DrawIO Properties Plugin — Application Specification
 
-Version: 1.9.1
+Version: 1.9.2
 Status: Approved
 
 ---
@@ -57,7 +57,7 @@ Organization shapes are at the top of the hierarchy and are never placed inside 
 
 ### 5.1 Display
 
-A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.8`) to allow users to confirm the deployed version.
+A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.9.2`) to allow users to confirm the deployed version.
 
 **Shape fields** (shown when a shape is selected):
 
@@ -257,9 +257,11 @@ Clicking the button produces two files saved in the **same folder as the current
 | `{diagramname}_{pagename}.png` | Full-page PNG export of the current page |
 | `{diagramname}_{pagename}.json` | JSON document describing the shape hierarchy and connectors |
 
-Naming convention: both `{diagramname}` and `{pagename}` are lowercased, whitespace removed, and non-alphanumeric characters (except `-`) stripped, then truncated to 64 characters each.
+Naming convention: both `{diagramname}` and `{pagename}` are lowercased, whitespace removed, and non-alphanumeric characters (except `-`) stripped, then truncated to 64 characters each. If a tag highlight is active at export time, the active tag name is appended after the same sanitisation rules: `{diagramname}_{pagename}_{tagname}`.
 
-Example: diagram `My Architecture.drawio`, page `Cloud Infra (EU)` → `myarchitecture_cloudinfraeu.json` + `myarchitecture_cloudinfraeu.png`.
+Example: diagram `My Architecture.drawio`, page `Cloud Infra (EU)`, no tag active → `myarchitecture_cloudinfraeu.json` + `myarchitecture_cloudinfraeu.png`.
+
+Example with tag `team-a` active → `myarchitecture_cloudinfraeu_team-a.json` + `myarchitecture_cloudinfraeu_team-a.png`.
 
 ### 10.3 Eligibility — shapes
 
@@ -582,7 +584,7 @@ to adjust the visual appearance):
 | `HIGHLIGHT_VERTEX` | Highlighted shapes | `strokeColor`, `strokeWidth`, `fillColor` |
 | `DEEMPH_VERTEX` | De-emphasised shapes | `strokeColor`, `strokeWidth`, `fillColor`, `fontColor`, `opacity` |
 | `HIGHLIGHT_EDGE` | Highlighted connectors | `strokeColor`, `strokeWidth` |
-| `DEEMPH_EDGE` | De-emphasised connectors | `strokeColor`, `strokeWidth`, `opacity` |
+| `DEEMPH_EDGE` | De-emphasised connectors | `strokeColor`, `strokeWidth`, `fontColor`, `opacity` |
 
 ### 15.5 Clear
 

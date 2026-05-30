@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.9.1)
+# DrawIO Architecture Properties Plugin (v1.9.2)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 
@@ -65,6 +65,8 @@ When no shape is selected, a green **Export architecture JSON** button appears a
 Connector endpoints (`source`/`target`) each carry `name` and `level`. If an endpoint shape is unnamed, ignored, or the connector is dangling, both fields show `"anonymous"` / `"undefined"` respectively.
 
 Shapes must have both `prop_name` and `prop_level` to appear in the hierarchy. Connectors must have `prop_name` to appear in the connectors list.
+
+If a tag highlight is active at export time, the active tag name is appended to the base filename: `{diagramname}_{pagename}_{tagname}.png/.json`.
 
 #### Tags tab
 - **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur.

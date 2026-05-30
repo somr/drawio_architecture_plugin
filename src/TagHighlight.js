@@ -7,7 +7,7 @@ var HIGHLIGHT_VERTEX = { strokeColor: '#FF6600', strokeWidth: '3', fillColor: '#
 var DEEMPH_VERTEX    = { strokeColor: '#CCCCCC', strokeWidth: '1', fillColor: '#F5F5F5',
                          fontColor: '#BBBBBB', opacity: '40' };
 var HIGHLIGHT_EDGE   = { strokeColor: '#FF6600', strokeWidth: '3' };
-var DEEMPH_EDGE      = { strokeColor: '#CCCCCC', strokeWidth: '1', opacity: '40' };
+var DEEMPH_EDGE      = { strokeColor: '#BBBBBB', strokeWidth: '1', opacity: '60', fontColor: '#BBBBBB' };
 
 function TagHighlight(ui, shapeProps) {
   this.ui = ui;
