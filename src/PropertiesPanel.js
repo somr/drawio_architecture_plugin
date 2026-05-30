@@ -1,6 +1,6 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.9.2';
+var PLUGIN_VERSION = '1.9.3';
 
 var ArchitectureReport  = require('./ArchitectureReport');
 var TagHighlight        = require('./TagHighlight');
@@ -290,6 +290,12 @@ PropertiesPanel.prototype._buildTagsPane = function(pane) {
     'margin-bottom:8px',
     'background:#fff',
   ].join(';');
+  // Stop propagation so the mxWindow's table mousedown handler (which calls
+  // activate() and changes z-indices) does not fire during the select click.
+  // That activation mid-mousedown can prevent the native dropdown from opening,
+  // especially after a window.alert() has caused the mxWindow to lose activeWindow.
+  dropdown.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+
   hlSection.appendChild(dropdown);
   this.highlightDropdown = dropdown;
 
@@ -829,12 +835,34 @@ PropertiesPanel.prototype._buildReportButton = function(container) {
     'width:100%',
   ].join(';');
 
+  var status = document.createElement('div');
+  status.style.cssText = [
+    'display:none',
+    'margin-top:6px',
+    'font-size:11px',
+    'word-break:break-all',
+  ].join(';');
+
+  var _statusTimer = null;
+  function showStatus(msg, isError) {
+    if (_statusTimer) clearTimeout(_statusTimer);
+    status.textContent = msg;
+    status.style.color = isError ? '#cc0000' : '#2e7d32';
+    status.style.display = 'block';
+    if (!isError) {
+      _statusTimer = setTimeout(function() { status.style.display = 'none'; }, 6000);
+    }
+  }
+
   btn.addEventListener('click', function() {
-    self.report.generate(self.tagHighlight.activeTag || null);
+    status.style.display = 'none';
+    self.report.generate(self.tagHighlight.activeTag || null, showStatus);
   });
 
   container.appendChild(btn);
-  this.reportBtn = btn;
+  container.appendChild(status);
+  this.reportBtn    = btn;
+  this.reportStatus = status;
 };
 
 // ---------------------------------------------------------------------------

@@ -14,13 +14,18 @@ function ArchitectureReport(ui, shapeProps) {
   this.shapeProps = shapeProps;
 }
 
-ArchitectureReport.prototype.generate = function(tagName) {
+// onStatus(message, isError) — called with result; falls back to mxUtils.alert if absent.
+ArchitectureReport.prototype.generate = function(tagName, onStatus) {
   var ui = this.ui;
   var sp = this.shapeProps;
 
+  function notify(msg, isError) {
+    if (onStatus) { onStatus(msg, !!isError); } else { mxUtils.alert(msg); }
+  }
+
   var file = ui.getCurrentFile();
   if (!file || !file.fileObject || !file.fileObject.path) {
-    mxUtils.alert('Save the diagram before exporting.');
+    notify('Save the diagram before exporting.', true);
     return;
   }
 
@@ -40,7 +45,7 @@ ArchitectureReport.prototype.generate = function(tagName) {
   var eligibleCells = _collectEligible(graph, sp);
 
   if (eligibleCells.length === 0) {
-    mxUtils.alert('No shapes with Name and Level found on this page.');
+    notify('No shapes with Name and Level found on this page.', true);
     return;
   }
 
@@ -52,13 +57,13 @@ ArchitectureReport.prototype.generate = function(tagName) {
 
   _exportPng(ui, pngPath, function(pngErr) {
     if (pngErr) {
-      mxUtils.alert('PNG export failed: ' + pngErr);
+      notify('PNG export failed: ' + pngErr, true);
       return;
     }
     window.electron.request(
       { action: 'writeFile', path: jsonPath, data: data, enc: 'utf8' },
-      function()    { mxUtils.alert('Exported:\n• ' + jsonFilename + '\n• ' + pngFilename); },
-      function(err) { mxUtils.alert('Could not write export: ' + (err || 'unknown error')); }
+      function()    { notify('Exported: ' + pngFilename + ', ' + jsonFilename); },
+      function(err) { notify('Could not write export: ' + (err || 'unknown error'), true); }
     );
   });
 };
