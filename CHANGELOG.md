@@ -4,6 +4,26 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.10.1] — 2026-06-23
+
+### Fixed
+- **Panel lockout after "Sync cross-page shapes"** — error paths in the sync button used `mxUtils.alert()`, which causes the same panel-lockout as the previously fixed export alert (commit `8eb06b8`): the native Electron dialog fires spurious events on dismissal that clear the graph selection and leave the panel stuck in disabled state. Replaced both alerts with an inline status line next to the button.
+- **Panel stays disabled after "Sync to all matching pages"** — after switching to target pages and back, the panel relied on `setSelectionCell()` triggering the selection-change event chain to call `panel.populate()`. Multiple `selectPage()` calls made this chain unreliable. The panel is now re-populated directly in the restore timeout, regardless of whether the event fires.
+
+---
+
+## [1.10.0] — 2026-06-23
+
+### Added
+- **Cross-page property consolidation** — three layers of tooling to avoid entering the same properties on repeated instances of the same shape across pages. Two shapes are considered the same component if their visible label text and DrawIO shape type (`shape=X` style token) both match exactly.
+  - **Layer 1 — auto-fill in Missing Properties Dialog** — when the dialog opens for a shape, the plugin scans all other pages for a vertex with the same label and shape type. If a matching shape with complete properties is found, the missing fields are pre-filled automatically and a blue *"Pre-filled from: [Page Name]"* banner is shown. If multiple pages match with different values, a dropdown lets the user pick the source before saving.
+  - **Layer 2 — "Sync to all matching pages" button** — appears at the bottom of the *Also in…* section whenever the selected shape has all three properties set and at least one other page contains a matching shape. Opens a Sync Preview Dialog listing the target pages with per-row checkboxes before any write is made.
+  - **Layer 3 — "Sync cross-page shapes" button** — shown in the empty panel state (no selection) for multi-page files. Scans the entire file, finds all shape groups with a fully-annotated source, and presents all proposed property copies in a single Sync Preview Dialog.
+- **`src/SyncPreviewDialog.js`** — new shared modal for Layers 2 and 3. Shows a scrollable checklist of proposed writes (page, label, what will change). The modal stays open during writes so that page-switching is hidden from the user.
+- **New helpers in `ShapeProperties.js`**: `getShapeTypeKey(cell)`, `getLabelText(cell)`, `findCrossPageMatches(ui, cell)`.
+
+---
+
 ## [1.9.2] — 2026-05-30
 
 ### Changed

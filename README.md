@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.9.2)
+# DrawIO Architecture Properties Plugin (v1.10.1)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 
@@ -46,6 +46,15 @@ Lists all shapes connected to the selected shape via a connector, with:
 ### Also in...
 Lists other pages in the file that contain a shape with the same name and level. Each entry is a clickable link that switches to that page and centres the viewport on the matching shape.
 
+When the selected shape has all three properties set, a **"Sync to all matching pages"** button also appears. Clicking it opens a preview dialog listing all other pages containing a shape with the same visual label and DrawIO shape type, with checkboxes per page. Confirming writes Name, Level, and Description to each selected page in one operation.
+
+### Cross-page consolidation
+
+Reduces the effort of entering the same properties on repeated instances of the same shape across pages. Two shapes are considered the same component if their visible label text and DrawIO shape type both match.
+
+- **Auto-fill on missing properties** — when the Missing Properties Dialog opens and a matching shape with complete properties exists on another page, the missing fields are pre-filled automatically. A blue banner shows which page the values came from. If multiple pages provide different values, a dropdown lets the user choose the source.
+- **Sync cross-page shapes** — in the empty panel state (no selection), a blue **"Sync cross-page shapes"** button scans the entire file and proposes all possible property copies from fully-annotated shapes to unannotated ones. A preview dialog lists every proposed change with per-row checkboxes before anything is written.
+
 ### Architecture export
 
 When no shape is selected, a green **Export architecture JSON** button appears at the bottom of the panel. Clicking it saves two files next to the `.drawio` file using a `{diagramname}_{pagename}` naming convention:
@@ -79,7 +88,7 @@ A **Confluence** section in the Properties tab lets users push the current page'
 > **Prerequisite:** requires a patched DrawIO Desktop build with the `httpRequest` IPC action (see `drawio-desktop` branch `dev`, commit `8c435ed`).
 
 ### Missing properties prompt
-When a shape or connector with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes require Name, Level, and Description; connectors require Name and Description only. Both shapes and connectors can be marked as *Ignored* to suppress the prompt permanently.
+When a shape or connector with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes require Name, Level, and Description; connectors require Name and Description only. If a matching shape exists on another page, the missing fields are pre-filled from it (see Cross-page consolidation above). Both shapes and connectors can be marked as *Ignored* to suppress the prompt permanently.
 
 ---
 
@@ -128,9 +137,11 @@ After the first registration, rebuilding and restarting DrawIO is all that is ne
 ```
 src/
   index.js              Plugin entry point; selection change listener
-  ShapeProperties.js    Property read/write, level hierarchy, container adoption, tag helpers
+  ShapeProperties.js    Property read/write, level hierarchy, container adoption,
+                        tag helpers, cross-page label+shape matching
   PropertiesPanel.js    Persistent mxWindow panel UI (Properties + Tags tabs)
-  PropertiesDialog.js   Missing-properties modal dialog
+  PropertiesDialog.js   Missing-properties modal dialog (with cross-page pre-fill)
+  SyncPreviewDialog.js  Cross-page sync preview modal (checkable target list)
   TagHighlight.js       Tag highlight engine — activate/clear/style merge
   ArchitectureReport.js Architecture JSON + PNG export
   ConfluenceUploader.js Confluence push — multipart upload via httpRequest IPC

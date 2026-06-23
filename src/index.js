@@ -78,10 +78,12 @@ Draw.loadPlugin(function(ui) {
       }
       var missingConn = ShapeProperties.getMissingConnectorProperties(cell);
       if (missingConn.length > 0) {
+        var connMatches = ShapeProperties.findCrossPageMatches(ui, cell);
         dialog.show(
           cell,
           function onSave()   { panel.setEdge(cell); },
-          function onIgnore() { panel.setConnectorIgnored(cell); }
+          function onIgnore() { panel.setConnectorIgnored(cell); },
+          connMatches
         );
       } else {
         panel.setEdge(cell);
@@ -98,10 +100,12 @@ Draw.loadPlugin(function(ui) {
 
     var missing = ShapeProperties.getMissingProperties(cell);
     if (missing.length > 0) {
+      var shapeMatches = ShapeProperties.findCrossPageMatches(ui, cell);
       dialog.show(
         cell,
         function onSave()   { panel.populate(cell); },
-        function onIgnore() { panel.setIgnored(cell); }
+        function onIgnore() { panel.setIgnored(cell); },
+        shapeMatches
       );
     } else {
       panel.populate(cell);

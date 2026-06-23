@@ -15,7 +15,7 @@ function PropertiesDialog(ui, shapeProps) {
   this.shapeProps = shapeProps;
 }
 
-PropertiesDialog.prototype.show = function(cell, onSave, onIgnore) {
+PropertiesDialog.prototype.show = function(cell, onSave, onIgnore, crossPageMatches) {
   var self = this;
   var sp = this.shapeProps;
   var graph = this.ui.editor.graph;
@@ -86,10 +86,12 @@ PropertiesDialog.prototype.show = function(cell, onSave, onIgnore) {
   // Fields
   // ---------------------------------------------------------------------------
   var inputs = {};
+  var firstFieldRow = null;
 
   fieldDefs.forEach(function(def) {
     var row = document.createElement('div');
     row.style.marginBottom = '10px';
+    if (!firstFieldRow) firstFieldRow = row;
 
     var label = document.createElement('label');
     label.textContent = def.label;
@@ -147,6 +149,69 @@ PropertiesDialog.prototype.show = function(cell, onSave, onIgnore) {
     dialog.appendChild(row);
     inputs[def.key] = input;
   });
+
+  // ---------------------------------------------------------------------------
+  // Pre-fill banner — copies missing properties from a matching shape on another page
+  // ---------------------------------------------------------------------------
+  var completeSources = [];
+  if (crossPageMatches && crossPageMatches.length > 0) {
+    crossPageMatches.forEach(function(m) {
+      var complete = isEdge
+        ? (sp.getProperty(m.cell, sp.PROP_NAME) && sp.getProperty(m.cell, sp.PROP_DESCRIPTION))
+        : (sp.getProperty(m.cell, sp.PROP_NAME) && sp.getProperty(m.cell, sp.PROP_LEVEL) && sp.getProperty(m.cell, sp.PROP_DESCRIPTION));
+      if (complete) completeSources.push(m);
+    });
+  }
+
+  if (completeSources.length > 0 && firstFieldRow) {
+    function applyPreFill(sourceCell) {
+      missing.forEach(function(key) {
+        var val = sp.getProperty(sourceCell, key);
+        if (val && inputs[key]) inputs[key].value = val;
+      });
+    }
+
+    applyPreFill(completeSources[0].cell);
+
+    var banner = document.createElement('div');
+    banner.style.cssText = [
+      'background:#e3f2fd',
+      'border:1px solid #90caf9',
+      'border-radius:4px',
+      'padding:7px 10px',
+      'margin-bottom:12px',
+      'font-size:11px',
+      'color:#1565c0',
+      'display:flex',
+      'align-items:center',
+      'flex-wrap:wrap',
+      'gap:4px',
+    ].join(';');
+
+    var bannerLabel = document.createElement('span');
+    bannerLabel.textContent = 'Pre-filled from:';
+    banner.appendChild(bannerLabel);
+
+    if (completeSources.length === 1) {
+      var strong = document.createElement('strong');
+      strong.textContent = ' ' + completeSources[0].pageName;
+      banner.appendChild(strong);
+    } else {
+      var srcSel = document.createElement('select');
+      srcSel.style.cssText = 'font-size:11px;border:1px solid #90caf9;border-radius:3px;padding:1px 4px;color:#1565c0;margin-left:4px;';
+      completeSources.forEach(function(m) {
+        var opt = document.createElement('option');
+        opt.textContent = m.pageName;
+        srcSel.appendChild(opt);
+      });
+      srcSel.addEventListener('change', function() {
+        applyPreFill(completeSources[srcSel.selectedIndex].cell);
+      });
+      banner.appendChild(srcSel);
+    }
+
+    dialog.insertBefore(banner, firstFieldRow);
+  }
 
   // ---------------------------------------------------------------------------
   // Button row

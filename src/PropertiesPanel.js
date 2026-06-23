@@ -1,10 +1,11 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.9.3';
+var PLUGIN_VERSION = '1.10.1';
 
 var ArchitectureReport  = require('./ArchitectureReport');
 var TagHighlight        = require('./TagHighlight');
 var ConfluenceUploader  = require('./ConfluenceUploader');
+var SyncPreviewDialog   = require('./SyncPreviewDialog');
 
 // Inline style strings applied to the Tags input field in its two states.
 // Using full cssText replacements avoids partial-override issues in Electron.
@@ -61,9 +62,15 @@ function PropertiesPanel(ui, shapeProps) {
   this.clearBtn = null;
 
   // Shared sub-objects
-  this.report       = new ArchitectureReport(ui, shapeProps);
-  this.tagHighlight = new TagHighlight(ui, shapeProps);
-  this.cfUploader   = new ConfluenceUploader(ui);
+  this.report          = new ArchitectureReport(ui, shapeProps);
+  this.tagHighlight    = new TagHighlight(ui, shapeProps);
+  this.cfUploader      = new ConfluenceUploader(ui);
+  this.syncPreviewDlg  = new SyncPreviewDialog(ui, shapeProps);
+
+  // Sync UI refs
+  this.syncToAllBtn        = null;  // inside "Also in..." section
+  this.syncCrossPageBtn    = null;  // in empty state
+  this.syncCrossPageStatus = null;  // inline status next to syncCrossPageBtn
 
   // Confluence section UI refs
   this.cfPagesLabel  = null;
@@ -116,6 +123,7 @@ PropertiesPanel.prototype.init = function() {
   this._buildAlsoIn(propsPane);
   this._buildConnectorEndpoints(propsPane);
   this._buildReportButton(propsPane);
+  this._buildSyncCrossPageButton(propsPane);
   this._buildConfluenceSection(propsPane);
   contentArea.appendChild(propsPane);
   this._propertiesPane = propsPane;
@@ -672,6 +680,7 @@ PropertiesPanel.prototype._updateConnections = function(cell) {
 };
 
 PropertiesPanel.prototype._buildAlsoIn = function(container) {
+  var self = this;
   var section = document.createElement('div');
   section.style.cssText = 'margin-top:10px;border-top:1px solid #ddd;padding-top:8px;display:none;';
 
@@ -684,73 +693,104 @@ PropertiesPanel.prototype._buildAlsoIn = function(container) {
   list.style.cssText = 'max-height:80px;overflow-y:auto;';
   section.appendChild(list);
 
+  var syncBtn = document.createElement('button');
+  syncBtn.textContent = 'Sync to all matching pages';
+  syncBtn.style.cssText = [
+    'display:none',
+    'margin-top:8px',
+    'padding:5px 10px',
+    'border:none',
+    'border-radius:4px',
+    'background:#1565c0',
+    'color:#fff',
+    'font-size:11px',
+    'font-weight:bold',
+    'cursor:pointer',
+    'width:100%',
+  ].join(';');
+  syncBtn.addEventListener('mouseenter', function() { syncBtn.style.background = '#0d47a1'; });
+  syncBtn.addEventListener('mouseleave', function() { syncBtn.style.background = '#1565c0'; });
+  section.appendChild(syncBtn);
+
   container.appendChild(section);
   this.alsoInSection = section;
   this.alsoInList = list;
+  this.syncToAllBtn = syncBtn;
 };
 
 PropertiesPanel.prototype._updateAlsoIn = function(cell) {
-  var sp = this.shapeProps;
-  var ui = this.ui;
+  var self = this;
+  var sp   = this.shapeProps;
+  var ui   = this.ui;
   var list = this.alsoInList;
 
   while (list.firstChild) list.removeChild(list.firstChild);
+  this.syncToAllBtn.style.display = 'none';
+  this.alsoInSection.style.display = 'none';
+
+  if (!ui.pages || ui.pages.length <= 1) return;
 
   var targetName  = sp.getProperty(cell, sp.PROP_NAME);
   var targetLevel = sp.getProperty(cell, sp.PROP_LEVEL);
+  var hasNavMatches = false;
 
-  if (!targetName || !targetLevel || !ui.pages || ui.pages.length <= 1) {
-    this.alsoInSection.style.display = 'none';
-    return;
-  }
-
-  var currentPage = ui.currentPage;
-  var matches = [];
-
-  ui.pages.forEach(function(page) {
-    if (page === currentPage) return;
-    var found = page.root && _findCellInPage(page.root, targetName, targetLevel, sp);
-    if (found) matches.push({ page: page, cell: found });
-  });
-
-  if (matches.length === 0) {
-    this.alsoInSection.style.display = 'none';
-    return;
-  }
-
-  matches.forEach(function(match) {
-    var pageName = match.page.getName ? match.page.getName() : (match.page.name || '(unnamed page)');
-
-    var item = document.createElement('div');
-    item.textContent = pageName;
-    item.style.cssText = [
-      'padding:2px 0',
-      'font-size:11px',
-      'color:#1976d2',
-      'cursor:pointer',
-      'text-decoration:underline',
-      'white-space:nowrap',
-      'overflow:hidden',
-      'text-overflow:ellipsis',
-    ].join(';');
-
-    item.addEventListener('mouseenter', function() { item.style.color = '#0d47a1'; });
-    item.addEventListener('mouseleave', function() { item.style.color = '#1976d2'; });
-
-    item.addEventListener('click', function() {
-      var targetCell = match.cell;
-      ui.selectPage(match.page, true);
-      setTimeout(function() {
-        var graph = ui.editor.graph;
-        graph.setSelectionCell(targetCell);
-        graph.scrollCellToVisible(targetCell, true);
-      }, 50);
+  // Navigation links (existing behaviour): match by prop_name + prop_level.
+  if (targetName && targetLevel) {
+    var currentPage = ui.currentPage;
+    var navMatches = [];
+    ui.pages.forEach(function(page) {
+      if (page === currentPage) return;
+      var found = page.root && _findCellInPage(page.root, targetName, targetLevel, sp);
+      if (found) navMatches.push({ page: page, cell: found });
     });
 
-    list.appendChild(item);
-  });
+    navMatches.forEach(function(match) {
+      var pageName = match.page.getName ? match.page.getName() : (match.page.name || '(unnamed page)');
 
-  this.alsoInSection.style.display = 'block';
+      var item = document.createElement('div');
+      item.textContent = pageName;
+      item.style.cssText = [
+        'padding:2px 0',
+        'font-size:11px',
+        'color:#1976d2',
+        'cursor:pointer',
+        'text-decoration:underline',
+        'white-space:nowrap',
+        'overflow:hidden',
+        'text-overflow:ellipsis',
+      ].join(';');
+
+      item.addEventListener('mouseenter', function() { item.style.color = '#0d47a1'; });
+      item.addEventListener('mouseleave', function() { item.style.color = '#1976d2'; });
+      item.addEventListener('click', function() {
+        var targetCell = match.cell;
+        ui.selectPage(match.page, true);
+        setTimeout(function() {
+          var graph = ui.editor.graph;
+          graph.setSelectionCell(targetCell);
+          graph.scrollCellToVisible(targetCell, true);
+        }, 50);
+      });
+
+      list.appendChild(item);
+    });
+
+    if (navMatches.length > 0) hasNavMatches = true;
+  }
+
+  // Sync button: visible when shape has all 3 properties AND cross-page matches exist.
+  var hasAllProps = targetName && targetLevel && sp.getProperty(cell, sp.PROP_DESCRIPTION);
+  if (hasAllProps) {
+    var crossMatches = sp.findCrossPageMatches(ui, cell);
+    if (crossMatches.length > 0) {
+      this.syncToAllBtn.onclick = function() { self._onSyncToAll(cell, crossMatches); };
+      this.syncToAllBtn.style.display = 'block';
+    }
+  }
+
+  if (hasNavMatches || this.syncToAllBtn.style.display === 'block') {
+    this.alsoInSection.style.display = 'block';
+  }
 };
 
 PropertiesPanel.prototype._buildConnectorEndpoints = function(container) {
@@ -865,6 +905,186 @@ PropertiesPanel.prototype._buildReportButton = function(container) {
   this.reportStatus = status;
 };
 
+PropertiesPanel.prototype._buildSyncCrossPageButton = function(container) {
+  var self = this;
+
+  var btn = document.createElement('button');
+  btn.textContent = 'Sync cross-page shapes';
+  btn.style.cssText = [
+    'display:none',
+    'margin-top:8px',
+    'padding:8px 12px',
+    'border:none',
+    'border-radius:4px',
+    'background:#1565c0',
+    'color:#fff',
+    'font-size:12px',
+    'font-weight:bold',
+    'cursor:pointer',
+    'width:100%',
+  ].join(';');
+  btn.addEventListener('mouseenter', function() { btn.style.background = '#0d47a1'; });
+  btn.addEventListener('mouseleave', function() { btn.style.background = '#1565c0'; });
+  btn.addEventListener('click', function() { self._onSyncCrossPage(); });
+
+  var status = document.createElement('div');
+  status.style.cssText = 'display:none;margin-top:6px;font-size:11px;word-break:break-word;';
+
+  container.appendChild(btn);
+  container.appendChild(status);
+  this.syncCrossPageBtn    = btn;
+  this.syncCrossPageStatus = status;
+};
+
+// ---------------------------------------------------------------------------
+// Sync actions
+// ---------------------------------------------------------------------------
+
+PropertiesPanel.prototype._onSyncToAll = function(cell, crossMatches) {
+  var sp = this.shapeProps;
+  var self = this;
+
+  var sourceProps = {
+    prop_name:        sp.getProperty(cell, sp.PROP_NAME),
+    prop_level:       sp.getProperty(cell, sp.PROP_LEVEL),
+    prop_description: sp.getProperty(cell, sp.PROP_DESCRIPTION),
+  };
+
+  var items = crossMatches.map(function(m) {
+    return {
+      cell:        m.cell,
+      page:        m.page,
+      pageName:    m.pageName,
+      label:       sp.getLabelText(m.cell),
+      sourceProps: sourceProps,
+      currentProps: {
+        prop_name:        sp.getProperty(m.cell, sp.PROP_NAME),
+        prop_level:       sp.getProperty(m.cell, sp.PROP_LEVEL),
+        prop_description: sp.getProperty(m.cell, sp.PROP_DESCRIPTION),
+      },
+    };
+  });
+
+  this.syncPreviewDlg.show(items, function(selected) {
+    self._applyCrossPageSync(selected, cell);
+  });
+};
+
+PropertiesPanel.prototype._onSyncCrossPage = function() {
+  var sp   = this.shapeProps;
+  var ui   = this.ui;
+  var self = this;
+  var statusEl = this.syncCrossPageStatus;
+
+  function showStatus(msg, isError) {
+    statusEl.textContent = msg;
+    statusEl.style.color   = isError ? '#cc0000' : '#2e7d32';
+    statusEl.style.display = 'block';
+  }
+
+  statusEl.style.display = 'none';
+
+  if (!ui.pages || ui.pages.length <= 1) {
+    showStatus('Only one page — nothing to sync.', true);
+    return;
+  }
+
+  // Group all vertices across all pages by label + shape type.
+  var groups = {};
+  ui.pages.forEach(function(page) {
+    if (!page.root) return;
+    var pageName = page.getName ? page.getName() : (page.name || '(unnamed page)');
+    _collectAllVertices(page.root, page, pageName, sp, groups);
+  });
+
+  // Build sync items: for each group, find source (most complete) and targets.
+  var items = [];
+  Object.keys(groups).forEach(function(key) {
+    var members = groups[key];
+    if (members.length < 2) return;
+
+    var source = null;
+    members.forEach(function(m) {
+      if (!source &&
+          sp.getProperty(m.cell, sp.PROP_NAME) &&
+          sp.getProperty(m.cell, sp.PROP_LEVEL) &&
+          sp.getProperty(m.cell, sp.PROP_DESCRIPTION)) {
+        source = m;
+      }
+    });
+    if (!source) return;
+
+    var sourceProps = {
+      prop_name:        sp.getProperty(source.cell, sp.PROP_NAME),
+      prop_level:       sp.getProperty(source.cell, sp.PROP_LEVEL),
+      prop_description: sp.getProperty(source.cell, sp.PROP_DESCRIPTION),
+    };
+
+    members.forEach(function(m) {
+      if (m === source) return;
+      items.push({
+        cell:        m.cell,
+        page:        m.page,
+        pageName:    m.pageName,
+        label:       sp.getLabelText(m.cell),
+        sourceProps: sourceProps,
+        currentProps: {
+          prop_name:        sp.getProperty(m.cell, sp.PROP_NAME),
+          prop_level:       sp.getProperty(m.cell, sp.PROP_LEVEL),
+          prop_description: sp.getProperty(m.cell, sp.PROP_DESCRIPTION),
+        },
+      });
+    });
+  });
+
+  if (items.length === 0) {
+    showStatus('No cross-page shapes with complete properties found to sync.', true);
+    return;
+  }
+
+  this.syncPreviewDlg.show(items, function(selected) {
+    self._applyCrossPageSync(selected, null);
+    if (selected.length > 0) {
+      showStatus('Synced ' + selected.length + ' shape' + (selected.length > 1 ? 's' : '') + '.', false);
+    }
+  });
+};
+
+/**
+ * Applies cross-page property writes for the given sync items.
+ * Uses selectPage to reach each target page; restores the original page and
+ * selection afterwards. The modal overlay hides any visual page-switching.
+ *
+ * After restoring the page the panel is re-populated directly rather than
+ * relying on the selection-change event chain, which can misfire after
+ * multiple selectPage calls.
+ */
+PropertiesPanel.prototype._applyCrossPageSync = function(items, savedCell) {
+  var sp   = this.shapeProps;
+  var ui   = this.ui;
+  var self = this;
+  var savedPage = ui.currentPage;
+
+  items.forEach(function(item) {
+    ui.selectPage(item.page, true);
+    sp.setProperties(ui.editor.graph, item.cell, item.sourceProps);
+  });
+
+  ui.selectPage(savedPage, true);
+
+  if (savedCell) {
+    setTimeout(function() {
+      var graph = ui.editor.graph;
+      graph.setSelectionCell(savedCell);
+      graph.scrollCellToVisible(savedCell, true);
+      // Re-populate directly: selectPage fires setEmpty() via the selection
+      // change listener and the event chain after multiple page-switches is
+      // unreliable, so we drive the panel state explicitly.
+      self.populate(savedCell);
+    }, 50);
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Panel states
 // ---------------------------------------------------------------------------
@@ -888,8 +1108,9 @@ PropertiesPanel.prototype.populate = function(cell) {
 
   this._updateParentDisplay(cell, graph);
   this._setFieldsDisabled(false);
-  this.unignoreBtn.style.display = 'none';
-  this.reportBtn.style.display   = 'none';
+  this.unignoreBtn.style.display      = 'none';
+  this.reportBtn.style.display        = 'none';
+  this.syncCrossPageBtn.style.display = 'none';
   this._updateAdoptButton(sp.getChildLevel(level));
   this._updateConnections(cell);
   this._updateAlsoIn(cell);
@@ -923,9 +1144,11 @@ PropertiesPanel.prototype.setIgnored = function(cell) {
   this.parentRow.style.display = '';
   this.parentDisplay.textContent = '—';
   this.parentDisplay.style.color = '#aaa';
-  this.unignoreBtn.style.display = 'block';
-  this.adoptBtn.style.display    = 'none';
-  this.reportBtn.style.display   = 'none';
+  this.unignoreBtn.style.display      = 'block';
+  this.adoptBtn.style.display         = 'none';
+  this.syncToAllBtn.style.display     = 'none';
+  this.syncCrossPageBtn.style.display = 'none';
+  this.reportBtn.style.display        = 'none';
   this.connectionsSection.style.display        = 'none';
   this.alsoInSection.style.display             = 'none';
   this.connectorEndpointsSection.style.display = 'none';
@@ -943,9 +1166,12 @@ PropertiesPanel.prototype.setEmpty = function() {
   this.parentRow.style.display = '';
   this.parentDisplay.textContent = '—';
   this.parentDisplay.style.color = '#aaa';
-  this.unignoreBtn.style.display = 'none';
-  this.adoptBtn.style.display    = 'none';
-  this.reportBtn.style.display   = 'block';
+  this.unignoreBtn.style.display    = 'none';
+  this.adoptBtn.style.display       = 'none';
+  this.syncToAllBtn.style.display   = 'none';
+  this.reportBtn.style.display      = 'block';
+  this.syncCrossPageBtn.style.display    = (this.ui.pages && this.ui.pages.length > 1) ? 'block' : 'none';
+  this.syncCrossPageStatus.style.display = 'none';
   this.connectionsSection.style.display        = 'none';
   this.alsoInSection.style.display             = 'none';
   this.connectorEndpointsSection.style.display = 'none';
@@ -972,9 +1198,11 @@ PropertiesPanel.prototype.setEdge = function(cell) {
   this.fields[sp.PROP_LEVEL].disabled        = true;
   this.fields[sp.PROP_LEVEL].style.background = '#f0f0f0';
 
-  this.unignoreBtn.style.display = 'none';
-  this.adoptBtn.style.display    = 'none';
-  this.reportBtn.style.display   = 'none';
+  this.unignoreBtn.style.display      = 'none';
+  this.adoptBtn.style.display         = 'none';
+  this.syncToAllBtn.style.display     = 'none';
+  this.syncCrossPageBtn.style.display = 'none';
+  this.reportBtn.style.display        = 'none';
   this.connectionsSection.style.display = 'none';
   this.alsoInSection.style.display      = 'none';
 
@@ -996,9 +1224,11 @@ PropertiesPanel.prototype.setConnectorIgnored = function(cell) {
   this.levelRow.style.display  = 'none';
   this.parentRow.style.display = 'none';
 
-  this.unignoreBtn.style.display = 'block';
-  this.adoptBtn.style.display    = 'none';
-  this.reportBtn.style.display   = 'none';
+  this.unignoreBtn.style.display      = 'block';
+  this.adoptBtn.style.display         = 'none';
+  this.syncToAllBtn.style.display     = 'none';
+  this.syncCrossPageBtn.style.display = 'none';
+  this.reportBtn.style.display        = 'none';
   this.connectionsSection.style.display        = 'none';
   this.alsoInSection.style.display             = 'none';
   this.connectorEndpointsSection.style.display = 'none';
@@ -1324,6 +1554,25 @@ PropertiesPanel.prototype._subscribeConfluenceUpdates = function() {
 // ---------------------------------------------------------------------------
 // Module-level helpers
 // ---------------------------------------------------------------------------
+
+function _collectAllVertices(node, page, pageName, sp, groups) {
+  if (!node) return;
+  if (node.vertex) {
+    var label = sp.getLabelText(node);
+    var shape = sp.getShapeTypeKey(node);
+    if (label) {
+      var key = label + '\x00' + shape;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ cell: node, page: page, pageName: pageName });
+    }
+  }
+  var children = node.children;
+  if (children) {
+    for (var i = 0; i < children.length; i++) {
+      _collectAllVertices(children[i], page, pageName, sp, groups);
+    }
+  }
+}
 
 function _findCellInPage(root, name, level, sp) {
   if (!root) return null;

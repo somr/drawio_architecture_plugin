@@ -368,6 +368,75 @@ function reparentCell(graph, cell) {
 }
 
 // ---------------------------------------------------------------------------
+// Cross-page label + shape type matching
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the shape style token from the cell's style string, e.g. "mxgraph.cisco.routers.router".
+ * Returns '' for plain shapes (no shape= token in style).
+ */
+function getShapeTypeKey(cell) {
+  var style = cell.style || '';
+  var m = style.match(/(?:^|;)shape=([^;]+)/);
+  return m ? m[1] : '';
+}
+
+function _getCellRawLabel(cell) {
+  var value = cell.value;
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value.getAttribute === 'function') return value.getAttribute('label') || '';
+  return '';
+}
+
+function _stripHtml(str) {
+  return (str || '').replace(/<[^>]*>/g, '').trim();
+}
+
+/**
+ * Returns the visible text label of a cell, with HTML stripped.
+ * Works on cells from any page (does not need the active graph).
+ */
+function getLabelText(cell) {
+  return _stripHtml(_getCellRawLabel(cell));
+}
+
+/**
+ * Finds all vertices across all pages (excluding the current page) that match
+ * the given cell by label text AND shape type.
+ * Returns an array of { page, cell, pageName }.
+ */
+function findCrossPageMatches(ui, cell) {
+  if (!ui || !ui.pages || ui.pages.length <= 1) return [];
+  var currentPage = ui.currentPage;
+  var cellLabel = getLabelText(cell);
+  var cellShape = getShapeTypeKey(cell);
+  if (!cellLabel) return [];
+
+  var matches = [];
+  ui.pages.forEach(function(page) {
+    if (page === currentPage) return;
+    if (!page.root) return;
+    var pageName = page.getName ? page.getName() : (page.name || '(unnamed page)');
+    _collectLabelMatches(page.root, cellLabel, cellShape, page, pageName, matches);
+  });
+  return matches;
+}
+
+function _collectLabelMatches(node, label, shapeType, page, pageName, results) {
+  if (!node) return;
+  if (node.vertex && getLabelText(node) === label && getShapeTypeKey(node) === shapeType) {
+    results.push({ page: page, cell: node, pageName: pageName });
+  }
+  var children = node.children;
+  if (children) {
+    for (var i = 0; i < children.length; i++) {
+      _collectLabelMatches(children[i], label, shapeType, page, pageName, results);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
@@ -411,4 +480,7 @@ module.exports = {
   isIgnored,
   getTags,
   setTags,
+  getShapeTypeKey,
+  getLabelText,
+  findCrossPageMatches,
 };

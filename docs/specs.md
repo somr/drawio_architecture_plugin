@@ -1,6 +1,6 @@
 # DrawIO Properties Plugin — Application Specification
 
-Version: 1.9.2
+Version: 1.10.1
 Status: Approved
 
 ---
@@ -57,7 +57,7 @@ Organization shapes are at the top of the hierarchy and are never placed inside 
 
 ### 5.1 Display
 
-A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.9.2`) to allow users to confirm the deployed version.
+A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.10.1`) to allow users to confirm the deployed version.
 
 **Shape fields** (shown when a shape is selected):
 
@@ -603,6 +603,67 @@ internal highlight state automatically without touching the model.
 The highlight operates on the current page only. Switching pages or opening a new file resets
 the internal state. There is no multi-tag simultaneous highlight; only one tag can be active
 at a time.
+
+---
+
+## 17. Cross-Page Property Consolidation
+
+### 17.1 Overview
+
+When the same component appears on multiple pages (e.g. "Auth Service" in both a system context diagram and a deployment diagram), users should not need to re-enter the same Name, Level, and Description on every page.
+
+Two shapes are considered the **same component** if both of the following match exactly:
+
+- **Label text**: The visible shape label with HTML stripped and trimmed (case-sensitive).
+- **Shape style type**: The `shape=X` token in the DrawIO style string. Plain shapes with no `shape=` token also match each other.
+
+### 17.2 Missing Properties Dialog — Pre-fill from another page (Layer 1)
+
+When the Missing Properties Dialog opens for a shape, the plugin scans all other pages for vertices matching by label + shape type.
+
+If a matching shape with complete properties (Name, Level, and Description all set) is found on another page:
+- The missing fields are automatically pre-filled from that source.
+- A blue banner above the fields reads **"Pre-filled from: [Page Name]"**.
+- If multiple pages provide complete matches with different values, a dropdown replaces the page name so the user can select which source to apply. Changing the selection re-fills the fields.
+- The user reviews the values and clicks **Save** as normal. No behaviour changes otherwise.
+
+This is read-only from the other pages — no write occurs until Save is clicked.
+
+### 17.3 "Sync to all matching pages" button (Layer 2)
+
+When a shape is selected and has all three properties set (Name, Level, Description), and at least one other page contains a shape with the same label + shape type, a **"Sync to all matching pages"** button appears at the bottom of the **Also in...** section.
+
+Clicking the button opens the Sync Preview Dialog (section 17.5).
+
+### 17.4 "Sync cross-page shapes" button (Layer 3)
+
+In the empty panel state (no shape selected), a **"Sync cross-page shapes"** button is shown below the Export button. It is only shown when the file contains more than one page.
+
+Clicking it scans all pages, groups vertices by label + shape type, identifies a source for each group (the member with all three properties set), and builds a list of all proposed property writes.
+
+This list is presented in the Sync Preview Dialog (section 17.5).
+
+If no cross-page shape groups have a member with complete properties, an alert is shown: "No cross-page shapes with matching labels and complete properties were found."
+
+### 17.5 Sync Preview Dialog
+
+The Sync Preview Dialog shows:
+
+- A scrollable list of proposed updates, one row per target shape.
+- Each row shows: the target page name, the shape's label, and a brief description of what will change (e.g. "adds Name, Level, Description").
+- All rows are checked by default. The user may uncheck individual rows to exclude them.
+- A **Select all** checkbox controls all rows at once.
+- **Cancel** closes the dialog without changes.
+- **Confirm** applies the checked writes, then closes the dialog.
+
+Writes are applied by temporarily switching to each target page and calling the model transaction API. Each write is undoable on that page's undo stack via Ctrl+Z. After all writes, the plugin restores the original page and re-selects the original cell.
+
+### 17.6 Constraints
+
+- Matching is exact on both label text and shape type. Case-sensitive.
+- Connectors are matched in Layer 1 (dialog pre-fill) using prop_name and prop_description (no Level).
+- Layer 2 and Layer 3 apply only to shapes (vertices), not connectors.
+- Cross-page writes go into each target page's own undo history.
 
 ---
 
