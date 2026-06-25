@@ -1,6 +1,6 @@
 # DrawIO Properties Plugin — Application Specification
 
-Version: 1.10.1
+Version: 1.11.0
 Status: Approved
 
 ---
@@ -57,7 +57,9 @@ Organization shapes are at the top of the hierarchy and are never placed inside 
 
 ### 5.1 Display
 
-A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.10.1`) to allow users to confirm the deployed version.
+A persistent floating panel (`mxWindow`) is always visible when the plugin is loaded. The panel title is **Architect toolset** followed by the current version (e.g. `Architect toolset v1.11.0`) to allow users to confirm the deployed version.
+
+The panel footer contains the version string on the left and a **Pause / Resume** toggle button on the right (see section 18).
 
 **Shape fields** (shown when a shape is selected):
 
@@ -83,6 +85,7 @@ Parent and Level are **not shown** for connectors.
 
 | Condition                              | Panel State                                                                          |
 |----------------------------------------|--------------------------------------------------------------------------------------|
+| Plugin paused (see section 18)         | All fields reset. Parent shows `—`. No dialogs triggered.                            |
 | No shape selected                      | All fields reset. Parent shows `—`.                                                  |
 | Multiple shapes selected               | All fields reset. Parent shows `—`.                                                  |
 | Single shape selected (normal)         | Shape fields populated and editable. Adopt Children button visible if level has valid children. |
@@ -664,6 +667,35 @@ Writes are applied by temporarily switching to each target page and calling the 
 - Connectors are matched in Layer 1 (dialog pre-fill) using prop_name and prop_description (no Level).
 - Layer 2 and Layer 3 apply only to shapes (vertices), not connectors.
 - Cross-page writes go into each target page's own undo history.
+
+---
+
+## 18. Plugin Pause / Resume
+
+### 18.1 Overview
+
+A **Pause / Resume** toggle button in the panel footer lets users temporarily suspend all selection-driven behaviour. When paused, shapes and connectors can be freely selected, moved, and rearranged without the plugin prompting for properties or populating the panel.
+
+### 18.2 Toggle button
+
+The button is always visible in the panel footer, right-aligned beside the version string.
+
+| State | Button label | Button colour |
+|-------|-------------|---------------|
+| Active (default) | ⏸ Pause | Grey |
+| Paused | ▶ Resume | Amber / orange |
+
+Clicking the button toggles the state immediately.
+
+### 18.3 Behaviour when paused
+
+- The selection change handler returns immediately without evaluating properties, triggering dialogs, or updating the panel.
+- The panel is reset to the empty state when the plugin is paused.
+- All panel buttons (Export architecture JSON, Sync cross-page shapes, Tags, Confluence) remain functional — they are independent of shape selection.
+
+### 18.4 Persistence
+
+The paused/active state is stored in `localStorage` under the key `drawio-pp-active` (`"true"` = active, `"false"` = paused). The default when the key is absent is active. The state persists across DrawIO restarts.
 
 ---
 

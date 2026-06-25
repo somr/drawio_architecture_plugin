@@ -44,6 +44,9 @@ src/PropertiesPanel.js     Creates the persistent mxWindow panel (two tabs:
                            ignored, edge, connectorIgnored. Saves on field blur
                            via ShapeProperties. Owns the "Sync to all matching
                            pages" button and "Sync cross-page shapes" button.
+                           Footer contains a Pause/Resume toggle (persisted to
+                           localStorage key 'drawio-pp-active'); isActive()
+                           is read by the selection handler in index.js.
 
 src/PropertiesDialog.js    Modal overlay popup shown when a shape is missing
                            properties. Provides Save and Ignore actions.
@@ -70,6 +73,7 @@ Custom properties are stored as XML attributes on the cell's value node — the 
 
 ```
 selection change
+  └─ plugin paused (!panel.isActive()) → panel.setEmpty(); return
   └─ 0 or multiple cells → panel.setEmpty()
   └─ 1 edge, ignored     → panel.setConnectorIgnored()
   └─ 1 edge, missing props → findCrossPageMatches() → dialog.show()

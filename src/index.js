@@ -62,6 +62,11 @@ Draw.loadPlugin(function(ui) {
   // Selection change handler
   // -------------------------------------------------------------------------
   graph.getSelectionModel().addListener(mxEvent.CHANGE, function() {
+    if (!panel.isActive()) {
+      panel.setEmpty();
+      return;
+    }
+
     var cells = graph.getSelectionCells();
 
     if (cells.length === 0 || cells.length > 1) {

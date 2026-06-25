@@ -1,6 +1,6 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.10.1';
+var PLUGIN_VERSION = '1.11.0';
 
 var ArchitectureReport  = require('./ArchitectureReport');
 var TagHighlight        = require('./TagHighlight');
@@ -88,6 +88,10 @@ function PropertiesPanel(ui, shapeProps) {
   this._tabBtns = null;
   this._activeTab = 'properties';
 
+  // Pause/resume toggle
+  this._active    = localStorage.getItem('drawio-pp-active') !== 'false';
+  this._toggleBtn = null;
+
   this.window = null;
 }
 
@@ -139,16 +143,24 @@ PropertiesPanel.prototype.init = function() {
 
   // Version footer — always visible at the bottom.
   var footer = document.createElement('div');
-  footer.textContent = 'Architect toolset v' + PLUGIN_VERSION;
   footer.style.cssText = [
-    'padding:4px 12px',
+    'display:flex',
+    'align-items:center',
+    'justify-content:space-between',
+    'padding:4px 8px 4px 12px',
     'font-size:10px',
-    'color:#bbb',
     'border-top:1px solid #e8e8e8',
     'background:#f5f5f5',
-    'text-align:center',
     'flex-shrink:0',
   ].join(';');
+
+  var versionSpan = document.createElement('span');
+  versionSpan.textContent = 'Architect toolset v' + PLUGIN_VERSION;
+  versionSpan.style.color = '#bbb';
+  footer.appendChild(versionSpan);
+
+  this._buildToggleButton(footer);
+
   container.appendChild(footer);
 
   var win = new mxWindow(
@@ -1601,5 +1613,53 @@ function _findCellInTree(cell, name, level, sp) {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Pause / resume toggle
+// ---------------------------------------------------------------------------
+
+PropertiesPanel.prototype.isActive = function() {
+  return this._active;
+};
+
+PropertiesPanel.prototype._buildToggleButton = function(container) {
+  var self = this;
+  var btn = document.createElement('button');
+  btn.style.cssText = [
+    'padding:2px 7px',
+    'border:none',
+    'border-radius:3px',
+    'font-size:10px',
+    'font-weight:bold',
+    'cursor:pointer',
+    'flex-shrink:0',
+  ].join(';');
+  btn.addEventListener('click', function() { self._setActive(!self._active); });
+  container.appendChild(btn);
+  this._toggleBtn = btn;
+  this._updateToggleBtn();
+};
+
+PropertiesPanel.prototype._setActive = function(bool) {
+  this._active = bool;
+  localStorage.setItem('drawio-pp-active', bool ? 'true' : 'false');
+  this._updateToggleBtn();
+  this.setEmpty();
+};
+
+PropertiesPanel.prototype._updateToggleBtn = function() {
+  if (!this._toggleBtn) return;
+  if (this._active) {
+    this._toggleBtn.textContent = '⏸ Pause';
+    this._toggleBtn.style.background = '#bbb';
+    this._toggleBtn.style.color = '#fff';
+    this._toggleBtn.title = 'Pause the plugin — shapes can be moved without being prompted for properties';
+  } else {
+    this._toggleBtn.textContent = '▶ Resume';
+    this._toggleBtn.style.background = '#e65100';
+    this._toggleBtn.style.color = '#fff';
+    this._toggleBtn.title = 'Resume the plugin — shape selection will trigger property checks again';
+  }
+};
 
 module.exports = PropertiesPanel;
