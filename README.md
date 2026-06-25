@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.10.1)
+# DrawIO Architecture Properties Plugin (v1.11.0)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 
@@ -86,6 +86,9 @@ If a tag highlight is active at export time, the active tag name is appended to 
 A **Confluence** section in the Properties tab lets users push the current page's PNG and JSON exports directly to one or more Confluence pages as attachments, without writing files to disk. Target pages are declared via a `confluence_page` diagram property (one URL per line, must contain `/pages/{id}/`). Credentials (base URL, email, API token) are stored in `localStorage` and managed via a collapsible settings form. Progress and per-page results are shown inline.
 
 > **Prerequisite:** requires a patched DrawIO Desktop build with the `httpRequest` IPC action (see `drawio-desktop` branch `dev`, commit `8c435ed`).
+
+### Pause / Resume
+A **⏸ Pause** button in the panel footer suspends all selection-driven behaviour. While paused, shapes and connectors can be freely selected, moved, and rearranged without any property dialog appearing or the panel updating. Click **▶ Resume** to restore normal behaviour. The toggle state persists across DrawIO restarts.
 
 ### Missing properties prompt
 When a shape or connector with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes require Name, Level, and Description; connectors require Name and Description only. If a matching shape exists on another page, the missing fields are pre-filled from it (see Cross-page consolidation above). Both shapes and connectors can be marked as *Ignored* to suppress the prompt permanently.

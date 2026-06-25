@@ -4,6 +4,13 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.11.0] — 2026-06-25
+
+### Added
+- **Pause / Resume toggle** — a **⏸ Pause** button in the panel footer suspends all selection-driven behaviour (property dialogs, panel population). While paused, shapes and connectors can be freely selected, moved, and rearranged without interruption. Clicking **▶ Resume** restores normal behaviour immediately. The paused/active state is persisted to `localStorage` (`drawio-pp-active`) and survives DrawIO restarts.
+
+---
+
 ## [1.10.1] — 2026-06-23
 
 ### Fixed
