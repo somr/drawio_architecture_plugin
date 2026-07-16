@@ -5,6 +5,7 @@
   "scripts": {
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
+    "build:dist": "webpack --mode production --output-path dist",
     "watch": "webpack --mode development --watch"
   },
   "devDependencies": {

@@ -8,10 +8,12 @@ const drawioPluginsDir = process.platform === 'win32'
   ? path.join(process.env.APPDATA, 'draw.io', 'plugins')
   : path.join(os.homedir(), '.config', 'draw.io', 'plugins');
 
-module.exports = {
+module.exports = (env, argv) => ({
   entry: './src/index.js',
   output: {
     filename: 'properties-plugin.js',
+    // Overridden with --output-path for the redistributable build (see
+    // npm run build:dist), which writes to the local dist/ folder instead.
     path: drawioPluginsDir,
   },
   // https is a Node.js built-in used in ConfluenceUploader to bypass Electron's
@@ -26,6 +28,6 @@ module.exports = {
   // 'inline-source-map' embeds the source map as a data-URI comment — no eval needed.
   devtool: 'inline-source-map',
   optimization: {
-    minimize: false, // Keep readable for debugging; enable for production releases
+    minimize: argv.mode === 'production', // Readable in dev, minified for production/dist builds
   },
-};
+});

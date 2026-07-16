@@ -6,16 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm install          # install webpack dev dependencies
-npm run build        # production bundle → dist/properties-plugin.js
-npm run build:dev    # unminified bundle (easier to debug)
+npm run build        # production (minified) bundle → DrawIO plugins directory
+npm run build:dev    # unminified bundle → DrawIO plugins directory (easier to debug)
+npm run build:dist   # production (minified) bundle → local dist/properties-plugin.js, for committing
 npm run watch        # watch mode, rebuilds on save
 ```
 
-The output is a single file: `dist/properties-plugin.js`. That file is what gets loaded by DrawIO.
+The output is a single file: `properties-plugin.js`. That file is what gets loaded by DrawIO.
+`dist/properties-plugin.js` is a committed copy for direct download from GitHub (see README)
+— rebuild it with `npm run build:dist` before committing whenever `src/` changes.
 
 ## Installing the plugin in DrawIO desktop
 
-The build outputs directly to DrawIO's plugin directory (`~/.config/draw.io/plugins/` on Linux, `%APPDATA%\draw.io\plugins\` on Windows), so the plugin is updated on every build.
+`npm run build` / `build:dev` output directly to DrawIO's plugin directory (`~/.config/draw.io/plugins/` on Linux, `%APPDATA%\draw.io\plugins\` on Windows), so the plugin is updated on every build.
 
 **First-time install only:**
 1. Open DrawIO desktop.

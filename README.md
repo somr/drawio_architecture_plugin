@@ -104,24 +104,36 @@ When a shape or connector with incomplete properties is selected, a modal dialog
 
 ## Installation
 
-### 1. Build
+### Option A: Quick install (no build required)
+
+Download the built plugin directly:
+
+[**properties-plugin.js**](https://raw.githubusercontent.com/somr/drawio_architecture_plugin/main/dist/properties-plugin.js)
+
+Save it into the DrawIO plugins directory:
+- **Linux:** `~/.config/draw.io/plugins/properties-plugin.js`
+- **Windows:** `%APPDATA%\draw.io\plugins\properties-plugin.js`
+
+Then continue with [Register the plugin](#register-the-plugin-first-time-only) below.
+
+### Option B: Build from source
 
 ```bash
 npm install
 npm run build:dev
 ```
 
-The build outputs directly to the DrawIO plugins directory:
+This outputs directly to the DrawIO plugins directory:
 - **Linux:** `~/.config/draw.io/plugins/properties-plugin.js`
 - **Windows:** `%APPDATA%\draw.io\plugins\properties-plugin.js`
 
-### 2. Register the plugin (first time only)
+### Register the plugin (first time only)
 
 1. Open DrawIO desktop.
 2. Go to **Extras → Plugins → Add** and select `properties-plugin.js` from the plugins directory above.
 3. Restart DrawIO.
 
-After the first registration, rebuilding and restarting DrawIO is all that is needed to pick up changes.
+After the first registration, rebuilding (or re-downloading) and restarting DrawIO is all that is needed to pick up changes.
 
 ---
 
@@ -129,8 +141,9 @@ After the first registration, rebuilding and restarting DrawIO is all that is ne
 
 | Command | Description |
 |---------|-------------|
-| `npm run build` | Production bundle (minified) |
-| `npm run build:dev` | Development bundle (readable, inline source map) |
+| `npm run build` | Production bundle (minified) → DrawIO plugins directory |
+| `npm run build:dev` | Development bundle (readable, inline source map) → DrawIO plugins directory |
+| `npm run build:dist` | Production bundle (minified) → local `dist/properties-plugin.js`, for committing/distribution |
 | `npm run watch` | Watch mode — rebuilds on every save |
 
 ---
