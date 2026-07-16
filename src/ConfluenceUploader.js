@@ -110,7 +110,10 @@ ConfluenceUploader.prototype.upload = function(pageId, filename, base64, content
     {
       action:     'httpRequest',
       url:        url,
-      method:     'POST',
+      // PUT (not POST) so Confluence updates the existing attachment by
+      // filename instead of rejecting it with "same file name as an
+      // existing attachment" — POST on this endpoint only ever creates.
+      method:     'PUT',
       headers:    {
         'Authorization':     authHeader,
         'X-Atlassian-Token': 'no-check',
