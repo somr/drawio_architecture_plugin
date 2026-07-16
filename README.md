@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.11.0)
+# DrawIO Architecture Properties Plugin (v1.11.1)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
 

@@ -4,6 +4,16 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.11.1] — 2026-07-16
+
+### Added
+- **Direct download of the built plugin** — `dist/properties-plugin.js` is now committed to the repo and linked from the README, so users can install without cloning and building from source. Added `npm run build:dist` (writes the minified production bundle to local `dist/`, separate from `build`/`build:dev` which still write straight into DrawIO's plugins directory for local development).
+
+### Fixed
+- **Confluence attachment upload fails on repeat push** — pushing to a Confluence page a second time returned `HTTP 400: Cannot add a new attachment with same file name as an existing attachment`, because attachment uploads used `POST /child/attachment`, which Confluence's REST API only allows for first-time creation. Switched to `PUT` on the same endpoint, which Confluence resolves by filename and versions instead of rejecting.
+
+---
+
 ## [1.11.0] — 2026-06-25
 
 ### Added
