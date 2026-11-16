@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm install          # install webpack dev dependencies
 npm run build        # production (minified) bundle → DrawIO plugins directory
 npm run build:dev    # unminified bundle → DrawIO plugins directory (easier to debug)
-npm run build:dist   # production (minified) bundle → local dist/properties-plugin.js, for committing
+npm run build:dist   # production (minified) bundle → local dist/properties-plugin.js (+ dist/architecture-config.example.js), for committing
 npm run watch        # watch mode, rebuilds on save
 ```
 
@@ -62,7 +62,30 @@ src/SyncPreviewDialog.js   Modal that previews proposed cross-page property
 
 src/TagHighlight.js        Tag highlight engine — activate/clear/style merge.
 
-src/ArchitectureReport.js  Architecture JSON + PNG export and Confluence push.
+src/LevelSelect.js         Fills a Level <select> from ShapeProperties.LEVELS,
+                           grouping same-rank levels (Workflow / Tier) in an
+                           <optgroup>. Shared by the panel and the dialog.
+
+src/NodeFields.js          Technology (registry dropdown or free text) and
+                           Provisioning controls, shared by panel and dialog.
+                           Reads the registry lazily on first setValue().
+
+src/TechnologyRegistry.js  Reads window.ArchitectureConfig (set by the separate
+                           architecture-config.js plugin file, see
+                           config/architecture-config.example.js) lazily,
+                           validates it once and caches it for the session.
+
+src/ArchitectureModel.js   Pure model builder (no DOM, no I/O): merges all
+                           pages by prop_id, validates (spec §10.7 rule codes),
+                           serialises YAML. Testable in Node with a mock model.
+
+src/ArchitectureReport.js  Export / Validate / Confluence push orchestration.
+                           Saves the YAML via a Blob <a download> (Electron
+                           native save dialog) — desktop writeFile IPC rejects
+                           non-diagram content, so it cannot write YAML.
+
+src/ValidationReportDialog.js  Findings modal; clicking a row navigates to
+                           the page + cell.
 
 src/ConfluenceUploader.js  Confluence credential management, page URL
                            validation, multipart upload via httpRequest IPC.
@@ -70,7 +93,11 @@ src/ConfluenceUploader.js  Confluence credential management, page URL
 
 ### Property storage
 
-Custom properties are stored as XML attributes on the cell's value node — the same mechanism DrawIO uses natively. Keys: `prop_name`, `prop_level`, `prop_description`, `properties_ignored`, `prop_tags`.
+Custom properties are stored as XML attributes on the cell's value node — the same mechanism DrawIO uses natively. Keys: `prop_id`, `prop_name`, `prop_level`, `prop_description`, `prop_parent`, `properties_ignored`, `prop_tags`, plus the Node-only `prop_technology` and `prop_provisioning`.
+
+- **Identity:** `prop_id` is the element's stable ID (required for shapes, optional for connectors). The same ID on several pages = the same element; the export merges them.
+- **Hierarchy:** level slugs and their legal parents are defined in `ShapeProperties.LEVELS` (`parents` arrays — the single source of truth; a Node may sit in a Service or directly in a Software System). `rank` is only for ordering and the same-level rule on flows. Parent resolution: nearest eligible container in the model tree, else `prop_parent` (`resolveParent`).
+- **Legacy:** pre-1.12 level labels are mapped in `getProperty` and rewritten by `migrateLegacyLevels` (run from index.js on file load / page switch).
 
 ### Selection flow
 
@@ -79,17 +106,18 @@ selection change
   └─ plugin paused (!panel.isActive()) → panel.setEmpty(); return
   └─ 0 or multiple cells → panel.setEmpty()
   └─ 1 edge, ignored     → panel.setConnectorIgnored()
-  └─ 1 edge, missing props → findCrossPageMatches() → dialog.show()
-                               → onSave: panel.setEdge()
-                               → onIgnore: panel.setConnectorIgnored()
-  └─ 1 edge, all props   → panel.setEdge()
+  └─ 1 edge              → panel.setEdge()   (connectors never open the dialog)
   └─ 1 shape, ignored    → panel.setIgnored()
-  └─ 1 shape, missing props → findCrossPageMatches() → dialog.show()
-                               (pre-fills fields if cross-page match exists)
+  └─ 1 shape, missing Name / ID / Level → findCrossPageMatches() → dialog.show()
+                               (pre-fills fields incl. ID from a complete match)
                                → onSave: panel.populate()
                                → onIgnore: panel.setIgnored()
-  └─ 1 shape, all props present → panel.populate()
+  └─ 1 shape, complete   → panel.populate()
 ```
+
+### Testing a build in DrawIO
+
+`npm run build` / `build:dev` overwrite the installed plugin. To try an unreleased build without losing the installed one, build with `npx webpack --mode development --output-path <tmp dir>`, back up the installed `properties-plugin.js`, copy the build over it, test, then restore the backup.
 
 ## Specification
 

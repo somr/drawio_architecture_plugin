@@ -4,6 +4,38 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.12.0] — 2026-11-16
+
+Aligns the plugin with the **Architecture Metamodel V1** (`docs/architecture-metamodel.md`). The export is now a single model of the whole file. **Breaking** for consumers of the 1.11 JSON export and for diagrams, which need element IDs (see *Upgrading* below).
+
+### Added
+- **Element IDs** (`prop_id`) — every shape has a stable, machine-facing ID (lowercase letters, digits, `-`, `_`, `.`), unique on its page and independent of the name. The missing-properties dialog suggests one from the Name and validates it as you type; the panel has an ID field. The same ID on several pages means the same element. Connectors may carry an optional ID.
+- **Parent picker** (`prop_parent`) — a shape that is not drawn inside its container on a page can name its parent explicitly. The picker lists the elements of the whole file whose level may contain the shape. A container always wins; moving a shape into a container clears the explicit parent.
+- **Technology registry** — Node technologies come from a configuration file installed next to the plugin (`config/architecture-config.example.js`, installed via *Extras → Plugins*). Technology becomes a dropdown showing each technology's kind; without a registry it stays free text. **Provisioning** is now a dropdown: `IAC`, `EXTERNAL`, `RUNTIME`. Values from earlier builds are kept and shown as *(unknown)*.
+- **Validate model** button and a **validation report** — checks the model against the metamodel's rules (IDs, references, hierarchy, cycles, flow levels, Workflow connectivity, registry) and lists errors, warnings and advisories with their rule codes. Clicking a line jumps to the shape. Shown before every export and Confluence push; it never blocks them (*Export anyway*).
+- **Workflow and Tier levels** — the combined *Pipeline / Workflow / Tier* level is split into **Workflow** and **Tier**, two alternatives at the same depth. The Level dropdown groups them under a *Workflow / Tier* heading.
+- **Nodes directly in a Software System** — allowed as shared system infrastructure (e.g. a shared topic or key).
+- **Ignore this connector** button in the panel, and a warning under *Connects* when a connector would not be exported as a flow.
+
+### Changed
+- **Architecture export is a YAML model of the whole file** — all pages are merged by element ID into one `{diagramname}.yaml` with `modelVersion: 1`, an optional `technologyRegistry: {name, version}`, `elements` (`id`, `name`, `type`, `parent`, `technology`, `provisioning`, `description`) and `flows` (`id`, `from`, `to`, `description`). Empty fields are left out instead of written as `null`. Connectors between the same two elements become one flow; flows across abstraction levels, to an Organization, or to the same element are left out and reported.
+- **The export is saved through DrawIO's save dialog** (as a download) instead of being written next to the `.drawio` file, and **no PNG is written to disk**. This also fixes the export failing with "path not authorised" on recent DrawIO desktop builds.
+- **Confluence push** uploads the whole-model `{diagramname}.yaml` and a PNG of the current page. Attachments named `{diagram}_{page}.json` by earlier versions are left in place.
+- **Description is optional** for shapes and connectors. The missing-properties dialog now asks for Name, ID and Level, and is **never shown for connectors**.
+- **Also in…** links pages where a shape with the same ID is drawn (previously: same Name and Level).
+- **Cross-page sync** copies the ID (and the explicit parent where it applies); a complete source needs ID, Name and Level. The preview spells out ID changes (*changes ID old → new*), leaves out shapes that would not change, and lists groups whose sources disagree on the ID instead of syncing them.
+- **Re-parenting** picks the innermost valid container when containers are nested, instead of reporting a conflict.
+- **Level values are slugs** — stored and exported as `organization`, `software-system`, `workflow`, `tier`, `service`, `node`. Existing diagrams are migrated automatically when opened and on page switch (undoable, marks the file modified). *Pipeline / Workflow / Tier* becomes `workflow`; switch real tiers to **Tier** by hand.
+
+### Fixed
+- **Shapes inside an unnamed group lost their parent** — the parent now resolves to the nearest eligible ancestor.
+
+### Upgrading
+- Shapes from earlier versions have no ID: selecting one opens the dialog with a suggested ID. Until then they are left out of the export (reported as `PP-001`).
+- Consumers of the 1.11 JSON export need updating to the YAML model.
+
+---
+
 ## [1.11.1] — 2026-07-16
 
 ### Added

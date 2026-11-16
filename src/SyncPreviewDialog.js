@@ -7,7 +7,11 @@
  * Accepts a flat list of sync items; the user checks/unchecks individual rows.
  *
  * Each item: { cell, page, pageName, label, sourceProps, currentProps }
- *   sourceProps / currentProps: { prop_name, prop_level, prop_description }
+ *   sourceProps / currentProps: { prop_id, prop_name, prop_level,
+ *                                 prop_description?, prop_technology?,
+ *                                 prop_provisioning?, prop_parent? }
+ * `notices` (optional): lines shown above the list, e.g. groups not synced
+ * because their sources disagree on the ID (specs §17.5).
  *
  * Clicking Confirm calls onConfirm(selectedItems) BEFORE the overlay is removed
  * so that any page-switching inside onConfirm stays hidden behind the overlay.
@@ -17,7 +21,7 @@ function SyncPreviewDialog(ui, shapeProps) {
   this.shapeProps = shapeProps;
 }
 
-SyncPreviewDialog.prototype.show = function(items, onConfirm) {
+SyncPreviewDialog.prototype.show = function(items, onConfirm, notices) {
   if (!items || items.length === 0) return;
 
   var overlay = document.createElement('div');
@@ -58,6 +62,18 @@ SyncPreviewDialog.prototype.show = function(items, onConfirm) {
   subtitle.textContent = 'Select the pages that should receive the properties from the current shape.';
   subtitle.style.cssText = 'margin:0 0 14px;color:#666;font-size:12px;';
   dialog.appendChild(subtitle);
+
+  if (notices && notices.length) {
+    var noticeBox = document.createElement('div');
+    noticeBox.style.cssText = 'background:#fff8e1;border:1px solid #ffe082;border-radius:4px;' +
+      'padding:6px 9px;margin:0 0 12px;font-size:11px;color:#8d6e00;max-height:90px;overflow-y:auto;';
+    notices.forEach(function(text) {
+      var line = document.createElement('div');
+      line.textContent = text;
+      noticeBox.appendChild(line);
+    });
+    dialog.appendChild(noticeBox);
+  }
 
   // Scrollable list
   var listWrap = document.createElement('div');
@@ -100,7 +116,7 @@ SyncPreviewDialog.prototype.show = function(items, onConfirm) {
     labelSpan.style.cssText = 'font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;';
     info.appendChild(labelSpan);
 
-    var diff = _describeDiff(item.currentProps, item.sourceProps);
+    var diff = describeDiff(item.currentProps, item.sourceProps);
     if (diff) {
       var diffSpan = document.createElement('div');
       diffSpan.textContent = diff;
@@ -166,19 +182,36 @@ SyncPreviewDialog.prototype.show = function(items, onConfirm) {
   });
 };
 
-function _describeDiff(current, source) {
+var DIFF_LABELS = [
+  ['prop_id',           'ID'],
+  ['prop_name',         'Name'],
+  ['prop_level',        'Level'],
+  ['prop_description',  'Description'],
+  ['prop_technology',   'Technology'],
+  ['prop_provisioning', 'Provisioning'],
+  ['prop_parent',       'Parent'],
+];
+
+/**
+ * "adds ID, Name, Level, updates Provisioning". A change of ID is spelled out
+ * ("changes ID old → new") because it changes which element the shape is.
+ * Returns null when nothing would change.
+ */
+function describeDiff(current, source) {
   if (!current) return null;
+  var idChange = null, adds = [], updates = [];
+  DIFF_LABELS.forEach(function(pair) {
+    var cur = current[pair[0]], src = source[pair[0]];
+    if (!src || cur === src) return;
+    if (pair[0] === 'prop_id' && cur) idChange = 'changes ID ' + cur + ' → ' + src;
+    else if (!cur)                    adds.push(pair[1]);
+    else                              updates.push(pair[1]);
+  });
   var parts = [];
-  if (!current.prop_name && source.prop_name)        parts.push('adds Name');
-  if (!current.prop_level && source.prop_level)      parts.push('adds Level');
-  if (!current.prop_description && source.prop_description) parts.push('adds Description');
-  if (current.prop_name && source.prop_name && current.prop_name !== source.prop_name)
-    parts.push('updates Name');
-  if (current.prop_level && source.prop_level && current.prop_level !== source.prop_level)
-    parts.push('updates Level');
-  if (current.prop_description && source.prop_description && current.prop_description !== source.prop_description)
-    parts.push('updates Description');
-  return parts.length ? parts.join(', ') : null;
+  if (idChange)       parts.push(idChange);
+  if (adds.length)    parts.push('adds ' + adds.join(', '));
+  if (updates.length) parts.push('updates ' + updates.join(', '));
+  return parts.length ? parts.join('; ') : null;
 }
 
 function _btnStyle(bg, color) {
@@ -193,5 +226,7 @@ function _btnStyle(bg, color) {
     'color:' + color,
   ].join(';');
 }
+
+SyncPreviewDialog.describeDiff = describeDiff;
 
 module.exports = SyncPreviewDialog;

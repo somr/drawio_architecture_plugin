@@ -76,23 +76,11 @@ Draw.loadPlugin(function(ui) {
 
     var cell = cells[0];
 
+    // Connectors have no required properties, so the popup is never shown
+    // for them (specs §6.1); they are edited and ignored from the panel.
     if (graph.model.isEdge(cell)) {
-      if (ShapeProperties.isIgnored(cell)) {
-        panel.setConnectorIgnored(cell);
-        return;
-      }
-      var missingConn = ShapeProperties.getMissingConnectorProperties(cell);
-      if (missingConn.length > 0) {
-        var connMatches = ShapeProperties.findCrossPageMatches(ui, cell);
-        dialog.show(
-          cell,
-          function onSave()   { panel.setEdge(cell); },
-          function onIgnore() { panel.setConnectorIgnored(cell); },
-          connMatches
-        );
-      } else {
-        panel.setEdge(cell);
-      }
+      if (ShapeProperties.isIgnored(cell)) panel.setConnectorIgnored(cell);
+      else                                 panel.setEdge(cell);
       return;
     }
 
@@ -117,12 +105,26 @@ Draw.loadPlugin(function(ui) {
     }
   });
 
+  // Rewrite pre-1.12 Level values on the page on screen. Deferred because
+  // 'pageSelected' fires in the middle of the page-switch change; editing the
+  // model there would interleave with it. Pages not yet visited still read
+  // correctly, as getProperty() maps legacy values on the fly.
+  function migrateCurrentPage() {
+    setTimeout(function() {
+      var n = ShapeProperties.migrateLegacyLevels(graph);
+      if (n > 0) console.log('[PropertiesPlugin] Migrated ' + n + ' legacy Level value(s)');
+    }, 0);
+  }
+
   // Reset panel and highlight state when a new file is opened.
   ui.editor.addListener('fileLoaded', function() {
     console.log('[PropertiesPlugin] fileLoaded event — resetting panel');
     panel.tagHighlight.reset();
     panel.setEmpty();
+    migrateCurrentPage();
   });
+
+  ui.editor.addListener('pageSelected', migrateCurrentPage);
 
   console.log('[PropertiesPlugin] Fully initialized');
 

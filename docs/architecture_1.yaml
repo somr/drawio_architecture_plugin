@@ -1,0 +1,217 @@
+modelVersion: 1
+
+# Sample architecture for exercising the V1 metamodel and compliance workflow.
+# IDs are stable machine-facing identifiers. Names are human-facing labels.
+
+elements:
+  # L1 - ownership boundaries
+  - id: global-trade
+    name: Global Trade
+    type: organization
+    description: Organization in scope for this sample architecture.
+    documentation:
+      - uri: https://wiki.example.com/global-trade
+        title: Global Trade Architecture
+
+  - id: enterprise-data
+    name: Enterprise Data
+    type: organization
+    description: External ownership domain used to demonstrate a cross-system dependency.
+
+  # L2 - software systems
+  - id: trade-processing
+    name: Trade Processing
+    type: software-system
+    parent: global-trade
+    description: Processes incoming trade experiences and publishes normalized results.
+
+  - id: company-reference-data
+    name: Company Reference Data
+    type: software-system
+    parent: enterprise-data
+    description: External system providing company reference data used during matching.
+
+  # L3 - workflow and tiers
+  - id: experience-processing
+    name: Experience Processing
+    type: workflow
+    parent: trade-processing
+    description: Ingests, normalizes, matches, and publishes trade experiences.
+
+  - id: data-tier
+    name: Data Tier
+    type: tier
+    parent: trade-processing
+    description: Cross-cutting data-storage capabilities shared by processing services.
+
+  - id: control-tier
+    name: Control Tier
+    type: tier
+    parent: trade-processing
+    description: Cross-cutting monitoring and control capabilities.
+
+  # L4 - workflow services
+  - id: ingestion
+    name: Ingestion
+    type: service
+    description: ssdsfsfs
+
+
+  - id: publisher-lambda
+    name: Publisher Lambda
+    type: node
+    parent: publication
+    technology: AWS_LAMBDA
+    provisioning: IAC
+    description: Publishes processed experience notifications.
+
+  # L5 - data nodes
+  - id: raw-bucket
+    name: Raw Trade Bucket
+    type: node
+    parent: raw-data
+    technology: AWS_S3
+    provisioning: IAC
+    description: Stores raw incoming trade records.
+
+  - id: curated-bucket
+    name: Curated Trade Bucket
+    type: node
+    parent: curated-data
+    technology: AWS_S3
+    provisioning: IAC
+    description: Stores normalized and matched trade records.
+
+  # L5 - control/observability node
+  - id: monitoring-log-group
+    name: Processing Log Group
+    type: node
+    parent: monitoring
+    technology: AWS_CLOUDWATCH_LOG_GROUP
+    provisioning: IAC
+    description: Receives processing telemetry.
+
+  # L5 - shared system infrastructure
+  - id: published-topic
+    name: Trade Experiences Topic
+    type: node
+    parent: trade-processing
+    technology: AWS_SNS
+    provisioning: IAC
+    description: Shared topic carrying publication events.
+
+  - id: delivery-queue
+    name: Trade Delivery Queue
+    type: node
+    parent: trade-processing
+    technology: AWS_SQS
+    provisioning: IAC
+    description: Buffers published events for downstream consumption.
+
+  - id: shared-kms-key
+    name: Trade KMS Key
+    type: node
+    parent: trade-processing
+    technology: AWS_KMS
+    provisioning: IAC
+    description: Shared encryption key. Its security relationships are not modeled as Flow in V1.
+
+flows:
+  # L2 - declared external dependency
+  - id: system-reference-data-flow
+    from: company-reference-data
+    to: trade-processing
+    description: Company reference data is supplied to Trade Processing.
+
+  # L4 - workflow internal graph
+  - id: ingestion-to-normalization
+    from: ingestion
+    to: normalization
+    description: Ingested records are provided for normalization.
+
+  - id: normalization-to-matching
+    from: normalization
+    to: matching
+    description: Normalized records are provided for company matching.
+
+  - id: matching-to-publication
+    from: matching
+    to: publication
+    description: Successfully matched records are provided for publication.
+
+  # L4 - interactions with the Data and Control Tiers
+  - id: raw-data-to-ingestion
+    from: raw-data
+    to: ingestion
+    description: Ingestion reads received trade records from raw storage.
+
+  - id: normalization-to-curated-data
+    from: normalization
+    to: curated-data
+    description: Normalization writes canonical records to curated storage.
+    documentation:
+      - uri: https://wiki.example.com/contracts/normalized-trade
+        title: Normalized Trade Data Description
+
+  - id: curated-data-to-matching
+    from: curated-data
+    to: matching
+    description: Matching reads normalized records from curated storage.
+
+  - id: matching-to-curated-data
+    from: matching
+    to: curated-data
+    description: Matching writes match results back to curated storage.
+
+  - id: matching-to-monitoring
+    from: matching
+    to: monitoring
+    description: Matching supplies architecture-significant processing telemetry.
+
+  # L5 - physical refinement. Shared infrastructure may form intermediary paths.
+  - id: raw-bucket-to-ingestion-lambda
+    from: raw-bucket
+    to: ingestion-lambda
+    description: Raw storage supplies records to the ingestion function.
+
+  - id: ingestion-lambda-to-normalization-job
+    from: ingestion-lambda
+    to: normalization-job
+    description: Ingestion starts or supplies normalization processing.
+
+  - id: normalization-job-to-curated-bucket
+    from: normalization-job
+    to: curated-bucket
+    description: Normalization writes canonical trade records.
+
+  - id: curated-bucket-to-matching-job
+    from: curated-bucket
+    to: matching-job
+    description: Matching reads normalized trade records.
+
+  - id: matching-job-to-curated-bucket
+    from: matching-job
+    to: curated-bucket
+    description: Matching writes match results.
+
+  - id: matching-job-to-publisher-lambda
+    from: matching-job
+    to: publisher-lambda
+    description: Matching supplies successfully processed records for publication.
+
+  - id: matching-job-to-monitoring
+    from: matching-job
+    to: monitoring-log-group
+    description: Matching emits processing telemetry.
+
+  - id: publisher-to-topic
+    from: publisher-lambda
+    to: published-topic
+    description: Publisher emits processed-experience events.
+
+  - id: topic-to-queue
+    from: published-topic
+    to: delivery-queue
+    description: Published events are delivered to the downstream queue.
+
+  # >>> GAP: anything after topic-to-queue was not captured (file is 8,137 characters). <<<

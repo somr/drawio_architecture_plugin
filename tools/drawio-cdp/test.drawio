@@ -1,0 +1,30 @@
+<mxfile>
+  <diagram id="p1" name="Context">
+    <mxGraphModel><root>
+      <mxCell id="0"/><mxCell id="1" parent="0"/>
+      <object id="sys" label="Trade" prop_name="Trade" prop_level="software-system" prop_id="trade" prop_description="Trade system">
+        <mxCell style="rounded=0;whiteSpace=wrap;html=1;container=1;collapsible=0;" vertex="1" parent="1"><mxGeometry x="20" y="20" width="400" height="300" as="geometry"/></mxCell>
+      </object>
+      <object id="topic" label="Topic" prop_name="Topic" prop_level="node" prop_id="topic" prop_technology="Kafka" prop_provisioning="Terraform">
+        <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="sys"><mxGeometry x="40" y="60" width="100" height="50" as="geometry"/></mxCell>
+      </object>
+      <object id="ing" label="Ingestion" prop_name="Ingestion" prop_level="Service">
+        <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="500" y="40" width="120" height="60" as="geometry"/></mxCell>
+      </object>
+      <object id="e1" label="">
+        <mxCell style="endArrow=classic;html=1;" edge="1" parent="1" source="ing" target="topic"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </object>
+    </root></mxGraphModel>
+  </diagram>
+  <diagram id="p2" name="Detail">
+    <mxGraphModel><root>
+      <mxCell id="0"/><mxCell id="1" parent="0"/>
+      <object id="wf" label="Flow" prop_name="Flow" prop_level="workflow" prop_id="flow" prop_description="A workflow">
+        <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="400" y="20" width="100" height="60" as="geometry"/></mxCell>
+      </object>
+      <object id="ing2" label="Ingestion" prop_name="Ingestion" prop_level="service" prop_id="ingestion" prop_description="Ingests trades">
+        <mxCell style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="20" width="120" height="60" as="geometry"/></mxCell>
+      </object>
+    </root></mxGraphModel>
+  </diagram>
+</mxfile>

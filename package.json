@@ -1,11 +1,11 @@
 {
   "name": "drawio-properties-plugin",
-  "version": "1.0.0",
-  "description": "A DrawIO plugin that manages Name, Level, and Description properties on shapes via a persistent panel.",
+  "version": "1.12.0",
+  "description": "A DrawIO plugin that manages architecture properties on shapes and exports the diagram as an Architecture Metamodel V1 YAML model.",
   "scripts": {
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
-    "build:dist": "webpack --mode production --output-path dist",
+    "build:dist": "webpack --mode production --output-path dist && node -e \"require('fs').copyFileSync('config/architecture-config.example.js', 'dist/architecture-config.example.js')\"",
     "watch": "webpack --mode development --watch"
   },
   "devDependencies": {

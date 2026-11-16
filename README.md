@@ -1,6 +1,6 @@
-# DrawIO Architecture Properties Plugin (v1.11.1)
+# DrawIO Architecture Properties Plugin (v1.12.0)
 
-A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured property management to diagram shapes and connectors, enforces a strict architectural hierarchy, and provides navigation aids across multi-page diagrams.
+A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured architecture properties to diagram shapes and connectors, enforces the architecture hierarchy, and exports the whole diagram as a model conforming to the **Architecture Metamodel V1** ([`docs/architecture-metamodel.md`](docs/architecture-metamodel.md)).
 
 ## Features
 
@@ -11,87 +11,105 @@ The panel is organised into two tabs: **Properties** and **Tags**.
 #### Properties tab
 For a selected **shape**:
 
-- **Parent** — the direct container shape (read-only), or *— no parent —* if the shape sits at the diagram root
+- **Parent** — the container the shape sits in (read-only). When the shape is not drawn inside its container on this page, a **Parent picker** lists the elements of the whole file that may contain it.
+- **ID** — the element's stable, machine-facing identity (e.g. `ingestion-lambda`). Lowercase letters, digits, `-`, `_` and `.`; unique on the page. Renaming the shape never changes it.
 - **Name** — editable text field
 - **Level** — dropdown constrained to the architectural hierarchy (see below)
-- **Description** — editable multi-line field
+- **Description** — optional multi-line field
+- **Technology** / **Provisioning** — shown only when Level is *Node*. Technology is a dropdown of the technology registry (see [Technology registry](#technology-registry)); Provisioning is `IAC`, `EXTERNAL` or `RUNTIME`.
 
 For a selected **connector**:
 
-- **Name** — editable text field
-- **Description** — editable multi-line field
-- **Connects** — shows the source and target shape names as clickable links. Clicking a name selects that shape and centres the viewport on it. Shapes with no name or marked as ignored appear as *anonymous*.
-
-(Level and Parent are not applicable to connectors and are hidden.)
+- **ID** — optional
+- **Name** — optional display label (not exported)
+- **Description** — optional
+- **Connects** — the source and target shape names as clickable links, plus a warning when the connector would not be exported as a flow (loose end, end without ID, ends at different levels, …)
+- **Ignore this connector** — excludes it from property management and from the export
 
 ### Architectural level hierarchy
-Levels follow a strict parent → child order:
 
 ```
-Organization  →  Software System  →  Pipeline / Workflow / Tier  →  Service  →  Node
+Organization  →  Software System  →  Workflow | Tier  →  Service  →  Node
+                        └──────────────────────────────────────────→  Node
 ```
 
-A shape may only be contained by a shape exactly one level above it.
+Workflow and Tier are alternatives at the same depth: a Software System may contain either or both, and a Service may sit inside either. A **Node directly inside a Software System** is shared system infrastructure (e.g. a shared topic, queue or key). Levels are stored as slugs (`organization`, `software-system`, `workflow`, `tier`, `service`, `node`) and shown with friendly labels.
+
+Diagrams made with earlier versions are migrated automatically when opened; former *Pipeline / Workflow / Tier* shapes become **Workflow** and real tiers need switching to **Tier** by hand.
+
+### Same element on several pages
+The same element can be drawn on several pages (a context page and a detail page, for example). All its shapes carry the **same ID**, and the export merges them into one element. **Also in…** lists the other pages where the selected element is drawn; each entry switches to that page and selects it.
 
 ### Hierarchical container adoption
-- **Adopt Children button** — appears when a shape's level can contain children. Scans the diagram for shapes with the correct child level whose bounding box is fully inside the container, and re-parents them in a single undoable operation.
-- **Auto re-parenting** — when the Level dropdown changes, the plugin automatically finds the correct parent container and re-parents the shape, preserving its visual position.
+- **Adopt Children button** — appears when a shape's level can contain children. Re-parents every shape of a valid child level that lies fully inside the container and has no closer valid container, in a single undoable operation.
+- **Auto re-parenting** — when the Level changes, the shape is moved into its innermost valid container, preserving its visual position.
 
 ### Connected shapes
-Lists all shapes connected to the selected shape via a connector, with:
-- Directional arrows (→ outgoing, ← incoming)
-- Shape name and level
-- Connector label in parentheses, if present
+Lists all shapes connected to the selected shape via a connector, with directional arrows, shape name and level, and the connector label.
 
-### Also in...
-Lists other pages in the file that contain a shape with the same name and level. Each entry is a clickable link that switches to that page and centres the viewport on the matching shape.
-
-When the selected shape has all three properties set, a **"Sync to all matching pages"** button also appears. Clicking it opens a preview dialog listing all other pages containing a shape with the same visual label and DrawIO shape type, with checkboxes per page. Confirming writes Name, Level, and Description to each selected page in one operation.
+### Missing properties prompt
+When a shape without a Name, ID or Level is selected, a dialog asks for them. The ID is suggested from the Name and checked as you type. Description, Technology and Provisioning are optional. Shapes can be marked as *Ignored* to suppress the prompt permanently. Connectors never trigger the prompt.
 
 ### Cross-page consolidation
+Finds copies of the same component that do not share an ID yet. Two shapes are candidate copies when their visible label text and DrawIO shape type both match.
 
-Reduces the effort of entering the same properties on repeated instances of the same shape across pages. Two shapes are considered the same component if their visible label text and DrawIO shape type both match.
+- **Pre-fill** — when the prompt opens and a candidate copy on another page has ID, Name and Level, the fields — including the ID — are pre-filled from it. A blue banner shows the source page.
+- **Sync to all matching pages** — on a complete shape, copies its properties to its candidate copies on other pages, after a preview.
+- **Sync cross-page shapes** — in the empty panel state, scans the whole file and proposes every copy in one preview. Groups whose complete members disagree on the ID are listed and skipped.
 
-- **Auto-fill on missing properties** — when the Missing Properties Dialog opens and a matching shape with complete properties exists on another page, the missing fields are pre-filled automatically. A blue banner shows which page the values came from. If multiple pages provide different values, a dropdown lets the user choose the source.
-- **Sync cross-page shapes** — in the empty panel state (no selection), a blue **"Sync cross-page shapes"** button scans the entire file and proposes all possible property copies from fully-annotated shapes to unannotated ones. A preview dialog lists every proposed change with per-row checkboxes before anything is written.
+The preview lists each change with a checkbox; a change of ID is spelled out (*changes ID old → new*).
 
 ### Architecture export
+When nothing is selected, the panel shows:
 
-When no shape is selected, a green **Export architecture JSON** button appears at the bottom of the panel. Clicking it saves two files next to the `.drawio` file using a `{diagramname}_{pagename}` naming convention:
+- **Export architecture YAML** — builds the model of the **whole file**, validates it, and offers `{diagramname}.yaml` for saving (DrawIO's save dialog opens; it starts in your Downloads folder).
+- **Validate model** — the same checks, without exporting.
 
-- **`{name}.png`** — full-page PNG export of the current page (white background).
-- **`{name}.json`** — JSON document describing the shape hierarchy and all named connectors.
+Problems are listed in a report dialog grouped into errors, warnings and advisories, with the metamodel's rule codes (`HIER-001`, `FLOW-001`, `WF-004`, …). Click a line to jump to the shape. Validation never blocks the export: **Export anyway** writes the model as drawn, leaving out only what would make it invalid YAML (unresolvable references, duplicate IDs, invalid flows).
 
-**JSON top-level fields:**
+Excerpt of an export:
 
-| Field | Description |
-|-------|-------------|
-| `page` | Page name as shown in the DrawIO tab. |
-| `generated` | Export date (`YYYY-MM-DD`). |
-| `nodes` | All eligible root shapes and their full subtrees, nested recursively. A root node is an eligible shape whose draw.io parent is not itself eligible. Each shape has `name`, `level`, `description` (null if blank), and `children`. |
-| `connectors` | Named, non-ignored connectors. Each entry has `name`, `description` (null if blank), `source`, and `target`. |
+```yaml
+# Architecture model exported from: Trade.drawio
+# Generated: 2026-11-16
+modelVersion: 1
+technologyRegistry:
+  name: acme-aws
+  version: "3"
+elements:
+  - id: trade-processing
+    name: Trade Processing
+    type: software-system
+    parent: global-trade
+  - id: ingestion-lambda
+    name: Ingestion Lambda
+    type: node
+    parent: ingestion
+    technology: AWS_LAMBDA
+    provisioning: IAC
+flows:
+  - id: ingestion-to-normalization
+    from: ingestion
+    to: normalization
+    description: Ingested records are provided for normalization.
+```
 
-Connector endpoints (`source`/`target`) each carry `name` and `level`. If an endpoint shape is unnamed, ignored, or the connector is dangling, both fields show `"anonymous"` / `"undefined"` respectively.
+Fields with no value are left out. The full format and every validation rule are in [`docs/specs.md`](docs/specs.md) §10.
 
-Shapes must have both `prop_name` and `prop_level` to appear in the hierarchy. Connectors must have `prop_name` to appear in the connectors list.
-
-If a tag highlight is active at export time, the active tag name is appended to the base filename: `{diagramname}_{pagename}_{tagname}.png/.json`.
+### Technology registry
+Node technologies come from a registry in a small configuration file installed next to the plugin — see [Install the technology registry](#install-the-technology-registry-optional). Without it, Technology is free text and the export warns that technologies were not checked.
 
 #### Tags tab
 - **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur.
 - **Highlight section** — select any tag from the dropdown and click **Activate** to visually emphasise all shapes and connectors carrying that tag and de-emphasise everything else. Click **Clear** to restore original styles. The highlight is applied as an undoable operation.
 
 ### Confluence push
-
-A **Confluence** section in the Properties tab lets users push the current page's PNG and JSON exports directly to one or more Confluence pages as attachments, without writing files to disk. Target pages are declared via a `confluence_page` diagram property (one URL per line, must contain `/pages/{id}/`). Credentials (base URL, email, API token) are stored in `localStorage` and managed via a collapsible settings form. Progress and per-page results are shown inline.
+A **Confluence** section in the Properties tab pushes the architecture model (`{diagramname}.yaml`, whole file) and a PNG of the current page to one or more Confluence pages as attachments, without writing files to disk. The same validation report is shown first. Target pages are declared via a `confluence_page` diagram property (one URL per line, must contain `/pages/{id}/`). Credentials (base URL, email, API token) are stored in `localStorage` and managed via a collapsible settings form.
 
 > **Prerequisite:** requires a patched DrawIO Desktop build with the `httpRequest` IPC action (see `drawio-desktop` branch `dev`, commit `8c435ed`).
 
 ### Pause / Resume
 A **⏸ Pause** button in the panel footer suspends all selection-driven behaviour. While paused, shapes and connectors can be freely selected, moved, and rearranged without any property dialog appearing or the panel updating. Click **▶ Resume** to restore normal behaviour. The toggle state persists across DrawIO restarts.
-
-### Missing properties prompt
-When a shape or connector with incomplete properties is selected, a modal dialog prompts for the missing values. Shapes require Name, Level, and Description; connectors require Name and Description only. If a matching shape exists on another page, the missing fields are pre-filled from it (see Cross-page consolidation above). Both shapes and connectors can be marked as *Ignored* to suppress the prompt permanently.
 
 ---
 
@@ -135,6 +153,12 @@ This outputs directly to the DrawIO plugins directory:
 
 After the first registration, rebuilding (or re-downloading) and restarting DrawIO is all that is needed to pick up changes.
 
+### Install the technology registry (optional)
+
+1. Download [**architecture-config.example.js**](https://raw.githubusercontent.com/somr/drawio_architecture_plugin/main/dist/architecture-config.example.js) (source: [`config/architecture-config.example.js`](config/architecture-config.example.js)) and edit the technologies to match your organisation. Each entry has a `kind` (`COMPUTE`, `STORAGE`, `MESSAGING`, `ORCHESTRATION`, `NETWORK`, `SECURITY`, `OBSERVABILITY`) and `executable` (`true`/`false`).
+2. In DrawIO, **Extras → Plugins → Add**, select the file, and restart DrawIO.
+3. To change it later, edit the copy in the plugins directory and restart DrawIO.
+
 ---
 
 ## Build scripts
@@ -143,7 +167,7 @@ After the first registration, rebuilding (or re-downloading) and restarting Draw
 |---------|-------------|
 | `npm run build` | Production bundle (minified) → DrawIO plugins directory |
 | `npm run build:dev` | Development bundle (readable, inline source map) → DrawIO plugins directory |
-| `npm run build:dist` | Production bundle (minified) → local `dist/properties-plugin.js`, for committing/distribution |
+| `npm run build:dist` | Production bundle (minified) → local `dist/properties-plugin.js`, plus a copy of the example registry → `dist/architecture-config.example.js`, for committing/distribution |
 | `npm run watch` | Watch mode — rebuilds on every save |
 
 ---
@@ -152,18 +176,27 @@ After the first registration, rebuilding (or re-downloading) and restarting Draw
 
 ```
 src/
-  index.js              Plugin entry point; selection change listener
-  ShapeProperties.js    Property read/write, level hierarchy, container adoption,
-                        tag helpers, cross-page label+shape matching
-  PropertiesPanel.js    Persistent mxWindow panel UI (Properties + Tags tabs)
-  PropertiesDialog.js   Missing-properties modal dialog (with cross-page pre-fill)
-  SyncPreviewDialog.js  Cross-page sync preview modal (checkable target list)
-  TagHighlight.js       Tag highlight engine — activate/clear/style merge
-  ArchitectureReport.js Architecture JSON + PNG export
-  ConfluenceUploader.js Confluence push — multipart upload via httpRequest IPC
+  index.js                  Plugin entry point; selection change listener
+  ShapeProperties.js        Property read/write, level hierarchy, IDs, parent
+                            resolution, container adoption, flow checks,
+                            cross-page helpers
+  TechnologyRegistry.js     Loads and validates window.ArchitectureConfig
+  NodeFields.js             Technology / Provisioning controls (panel + dialog)
+  LevelSelect.js            Level dropdown with the Workflow / Tier group
+  PropertiesPanel.js        Persistent mxWindow panel UI (Properties + Tags tabs)
+  PropertiesDialog.js       Missing-properties modal dialog (with cross-page pre-fill)
+  SyncPreviewDialog.js      Cross-page sync preview modal (checkable target list)
+  ArchitectureModel.js      Whole-file model: merge, validation, YAML
+  ArchitectureReport.js     Export / validate / Confluence push orchestration
+  ValidationReportDialog.js Validation findings modal
+  TagHighlight.js           Tag highlight engine — activate/clear/style merge
+  ConfluenceUploader.js     Confluence push — multipart upload via httpRequest IPC
+config/
+  architecture-config.example.js   Example technology registry
 docs/
-  specs.md              Full feature specification
-webpack.config.js       Build configuration
+  specs.md                  Full feature specification
+  architecture-metamodel.md Architecture Metamodel V1
+webpack.config.js           Build configuration
 ```
 
 ---
