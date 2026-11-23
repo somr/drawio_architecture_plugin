@@ -1,6 +1,6 @@
 'use strict';
 
-var PLUGIN_VERSION = '1.12.0';
+var PLUGIN_VERSION = '1.13.0';
 
 var ArchitectureReport  = require('./ArchitectureReport');
 var fillLevelSelect     = require('./LevelSelect');

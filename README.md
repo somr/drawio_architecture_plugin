@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.12.0)
+# DrawIO Architecture Properties Plugin (v1.13.0)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured architecture properties to diagram shapes and connectors, enforces the architecture hierarchy, and exports the whole diagram as a model conforming to the **Architecture Metamodel V1** ([`docs/architecture-metamodel.md`](docs/architecture-metamodel.md)).
 
@@ -24,6 +24,7 @@ For a selected **connector**:
 - **Name** — optional display label (not exported)
 - **Description** — optional
 - **Connects** — the source and target shape names as clickable links, plus a warning when the connector would not be exported as a flow (loose end, end without ID, ends at different levels, …)
+- **Lift to common level** — shown when the ends are at different levels. Tick it when one end is not known in detail (e.g. a Service talks to another Software System, but you don't know which part of it): the export writes the flow between the ancestors of both ends that are at the same level and keeps the original connection under `lifted_from`
 - **Ignore this connector** — excludes it from property management and from the export
 
 ### Architectural level hierarchy
@@ -67,6 +68,8 @@ When nothing is selected, the panel shows:
 
 Problems are listed in a report dialog grouped into errors, warnings and advisories, with the metamodel's rule codes (`HIER-001`, `FLOW-001`, `WF-004`, …). Click a line to jump to the shape. Validation never blocks the export: **Export anyway** writes the model as drawn, leaving out only what would make it invalid YAML (unresolvable references, duplicate IDs, invalid flows).
 
+When shapes have a Name and Level but no ID, the report offers **Fix N missing IDs…**: it previews an ID for each of them (reusing the ID of the same element on other pages, otherwise one made from the name) and sets the ones you keep.
+
 Excerpt of an export:
 
 ```yaml
@@ -92,6 +95,12 @@ flows:
     from: ingestion
     to: normalization
     description: Ingested records are provided for normalization.
+  - from: trade-processing          # lifted: only the Service side is known
+    to: market-data
+    declared: false
+    lifted_from:
+      - from: ingestion
+        to: market-data
 ```
 
 Fields with no value are left out. The full format and every validation rule are in [`docs/specs.md`](docs/specs.md) §10.

@@ -4,7 +4,7 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
-## [Unreleased]
+## [1.13.0] — 2026-11-23
 
 ### Added
 - **Lift to common level** — a connector between elements at different levels (e.g. a Service to another Software System whose parts are not known yet) can be ticked *Lift to common level* in the panel. The export then writes a flow between the ancestors of both ends at the same level, listing the original connection under the flow's new `lifted_from` field; a flow that exists only through lifting gets `declared: false`. Lifted connections are reported as advisories (`PP-010`); a lift already covered by a flow drawn at a single level is left out (`PP-012`); a lift with no parent to climb through is an error (`PP-011`). Requires the metamodel amendment for `declared` / `lifted_from` (specs §10.5.1).
