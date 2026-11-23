@@ -12,6 +12,9 @@
  *                                 prop_provisioning?, prop_parent? }
  * `notices` (optional): lines shown above the list, e.g. groups not synced
  * because their sources disagree on the ID (specs §17.5).
+ * `opts` (optional): { title, subtitle, confirmLabel, onCancel } to reuse the dialog for
+ * other batch writes (e.g. fixing missing IDs from the validation report).
+ * An item with `detail` shows that line instead of the computed diff.
  *
  * Clicking Confirm calls onConfirm(selectedItems) BEFORE the overlay is removed
  * so that any page-switching inside onConfirm stays hidden behind the overlay.
@@ -21,8 +24,9 @@ function SyncPreviewDialog(ui, shapeProps) {
   this.shapeProps = shapeProps;
 }
 
-SyncPreviewDialog.prototype.show = function(items, onConfirm, notices) {
+SyncPreviewDialog.prototype.show = function(items, onConfirm, notices, opts) {
   if (!items || items.length === 0) return;
+  opts = opts || {};
 
   var overlay = document.createElement('div');
   overlay.style.cssText = [
@@ -54,12 +58,12 @@ SyncPreviewDialog.prototype.show = function(items, onConfirm, notices) {
   ].join(';');
 
   var title = document.createElement('h3');
-  title.textContent = 'Sync Properties to Other Pages';
+  title.textContent = opts.title || 'Sync Properties to Other Pages';
   title.style.cssText = 'margin:0 0 8px;font-size:15px;color:#333;';
   dialog.appendChild(title);
 
   var subtitle = document.createElement('p');
-  subtitle.textContent = 'Select the pages that should receive the properties from the current shape.';
+  subtitle.textContent = opts.subtitle || 'Select the pages that should receive the properties from the current shape.';
   subtitle.style.cssText = 'margin:0 0 14px;color:#666;font-size:12px;';
   dialog.appendChild(subtitle);
 
@@ -116,7 +120,7 @@ SyncPreviewDialog.prototype.show = function(items, onConfirm, notices) {
     labelSpan.style.cssText = 'font-size:11px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;';
     info.appendChild(labelSpan);
 
-    var diff = describeDiff(item.currentProps, item.sourceProps);
+    var diff = item.detail || describeDiff(item.currentProps, item.sourceProps);
     if (diff) {
       var diffSpan = document.createElement('div');
       diffSpan.textContent = diff;
@@ -159,7 +163,7 @@ SyncPreviewDialog.prototype.show = function(items, onConfirm, notices) {
   cancelBtn.style.cssText = _btnStyle('#f5f5f5', '#333');
 
   var confirmBtn = document.createElement('button');
-  confirmBtn.textContent = 'Confirm';
+  confirmBtn.textContent = opts.confirmLabel || 'Confirm';
   confirmBtn.style.cssText = _btnStyle('#1976d2', '#fff');
 
   btnRow.appendChild(cancelBtn);
@@ -173,7 +177,10 @@ SyncPreviewDialog.prototype.show = function(items, onConfirm, notices) {
     document.body.removeChild(overlay);
   }
 
-  cancelBtn.addEventListener('click', close);
+  cancelBtn.addEventListener('click', function() {
+    close();
+    if (typeof opts.onCancel === 'function') opts.onCancel();
+  });
 
   confirmBtn.addEventListener('click', function() {
     var selected = items.filter(function(_, i) { return checkboxes[i].checked; });

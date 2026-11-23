@@ -600,6 +600,18 @@ The general rule: the export is **faithful** to the diagram. It only drops or ch
 
 Validation never blocks the export (the metamodel tooling is report-only).
 
+#### 10.7.1 Fixing missing IDs
+
+When the report has `PP-001` findings, it gets an extra button, **Fix N missing IDs…**, left of the usual buttons, whether it was opened from Validate, Export or Push. It plans an ID for every non-ignored shape in the file that has a Name and a valid Level but no ID:
+
+- Shapes are grouped by **Name + Level** (exact match).
+- If complete shapes elsewhere in the file with that Name + Level all carry **one** ID, the group reuses it: they are the same element drawn again.
+- If they carry **several** IDs, the group is not fixed. A notice in the preview lists the IDs, and those shapes must be given an ID by hand.
+- Otherwise, the group gets a **new ID**: the slug of the name (section 4.2), made unique across the whole file with `-2`, `-3`, …
+- Shapes of one group on different pages share the ID. A second shape of the group on the **same** page gets its own new ID, because one page cannot hold one ID twice (`ID-001`).
+
+The planned IDs are shown in a preview, one row per shape with its page, Name, Level and ID, all checked by default. **Set IDs** writes the checked rows, with one undo step per page, then rebuilds the report it was opened from (Validate, Export or Push) from the fixed diagram. **Cancel** writes nothing. If a Push was in progress, it reports *"Push cancelled — nothing was uploaded."*
+
 ### 10.8 Error conditions (disk export)
 
 Messages are shown in the panel status line next to the button.

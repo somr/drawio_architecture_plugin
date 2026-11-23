@@ -778,6 +778,105 @@ function suggestId(ui, cell, name) {
   }
 }
 
+/**
+ * Plans IDs for every shape that has Name and a valid Level but no ID (the
+ * export's PP-001, specs §10.7.1). Shapes are grouped by Name + Level:
+ *   - if complete shapes elsewhere in the file with that Name + Level all
+ *     carry one ID, the group reuses it (same element, drawn again);
+ *   - if they carry several IDs, the group is skipped (ambiguous) and reported
+ *     in `notices`;
+ *   - otherwise the group gets a new ID: the slug of the name, made unique
+ *     across the file with -2, -3, …
+ * Shapes of a group on different pages share the ID; a second shape of the
+ * group on the same page gets its own new ID (one page cannot hold one ID
+ * twice). Returns { items: [{cell, page, pageName, name, level, id, reused}],
+ * notices: [string] }, items in page order, then model order.
+ */
+function planMissingIds(ui) {
+  var allIds = {};           // every shape ID in the file
+  var idsOnPage = [];        // [{page, ids: {id: true}}]
+  var existing = {};         // name+level key -> {id: true}
+  var missing = [];          // [{cell, page, pageName, name, level, key}]
+
+  function key(name, level) { return level + '\u0000' + name; }
+  function pageIds(page) {
+    for (var i = 0; i < idsOnPage.length; i++) if (idsOnPage[i].page === page) return idsOnPage[i].ids;
+    var ids = {};
+    idsOnPage.push({ page: page, ids: ids });
+    return ids;
+  }
+
+  _forEachPage(ui, function(page, pageName, root) {
+    var onPage = pageIds(page);
+    _walk(root, function(c) {
+      if (!c.vertex || isIgnored(c)) return;
+      var id = getProperty(c, PROP_ID);
+      var name = getProperty(c, PROP_NAME);
+      var level = getProperty(c, PROP_LEVEL);
+      if (id) {
+        allIds[id] = true;
+        onPage[id] = true;
+        if (name && isValidLevel(level) && isValidId(id)) {
+          var k = key(name, level);
+          (existing[k] = existing[k] || {})[id] = true;
+        }
+        return;
+      }
+      if (name && isValidLevel(level)) {
+        missing.push({ cell: c, page: page, pageName: pageName, name: name, level: level,
+                       key: key(name, level) });
+      }
+    });
+  });
+
+  function freshId(name) {
+    var base = slugifyId(name);
+    if (!base) return '';
+    var id = base;
+    for (var n = 2; allIds[id]; n++) {
+      var suffix = '-' + n;
+      id = base.substring(0, ID_MAX_LENGTH - suffix.length).replace(/-+$/, '') + suffix;
+    }
+    allIds[id] = true;
+    return id;
+  }
+
+  var groupIds = {};         // key -> [ids usable by the group, in order]
+  var skipped = {};          // key -> true once reported
+  var items = [], notices = [];
+
+  missing.forEach(function(m) {
+    var known = Object.keys(existing[m.key] || {});
+    if (known.length > 1) {
+      if (!skipped[m.key]) {
+        skipped[m.key] = true;
+        notices.push('Not fixed — "' + m.name + '" (' + getLevelLabel(m.level) + ') already has several IDs: ' +
+                     known.join(', ') + '. Set the ID by hand.');
+      }
+      return;
+    }
+    var candidates = groupIds[m.key] = groupIds[m.key] || known.slice();
+    var onPage = pageIds(m.page);
+    var id = null;
+    for (var i = 0; i < candidates.length; i++) {
+      if (!onPage[candidates[i]]) { id = candidates[i]; break; }
+    }
+    if (!id) {
+      id = freshId(m.name);
+      if (!id) {
+        notices.push('Not fixed — no ID can be made from the name "' + m.name + '" on ' + m.pageName + '.');
+        return;
+      }
+      candidates.push(id);
+    }
+    onPage[id] = true;
+    items.push({ cell: m.cell, page: m.page, pageName: m.pageName, name: m.name, level: m.level,
+                 id: id, reused: known.indexOf(id) !== -1 });
+  });
+
+  return { items: items, notices: notices };
+}
+
 // ---------------------------------------------------------------------------
 // Elements across the whole file (Parent picker, export)
 // ---------------------------------------------------------------------------
@@ -921,6 +1020,7 @@ module.exports = {
   slugifyId,
   validateId,
   suggestId,
+  planMissingIds,
   findSameIdOnPage,
   findOtherPagesWithId,
   isElement,

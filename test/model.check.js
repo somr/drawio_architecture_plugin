@@ -182,6 +182,39 @@ assert.strictEqual(sp.getFlowProblem(edge(org, org2)).code, 'FLOW-010');
 assert.strictEqual(sp.getFlowProblem(edge(wf, cell({ prop_name: 'T', prop_level: 'tier', prop_id: 't' }))), null); // Workflow↔Tier OK
 assert.strictEqual(sp.getFlowProblem(edge(node, topic, { properties_ignored: 'true' })), null);
 
+// --- planMissingIds (fix PP-001) ---
+(function() {
+  var a = makePage('A'), b = makePage('B'), c = makePage('C');
+  a.add(cell({ prop_name: 'Billing', prop_level: 'service', prop_id: 'billing' }));
+  var bBill = b.add(cell({ prop_name: 'Billing', prop_level: 'service' }));        // reuse 'billing'
+  var aBill2 = a.add(cell({ prop_name: 'Billing', prop_level: 'service' }));       // 'billing' taken on A → new
+  var aQ = a.add(cell({ prop_name: 'Queue', prop_level: 'node' }));                // new 'queue'
+  var bQ = b.add(cell({ prop_name: 'Queue', prop_level: 'node' }));                // same group → 'queue'
+  var bQ2 = b.add(cell({ prop_name: 'Queue', prop_level: 'node' }));               // twice on B → new
+  var cQ = c.add(cell({ prop_name: 'Queue', prop_level: 'node' }));                // → 'queue'
+  a.add(cell({ prop_name: 'Queue Svc', prop_level: 'service', prop_id: 'queue-2' })); // forces skipping -2
+  var cQs = c.add(cell({ prop_name: 'Queue', prop_level: 'service' }));            // other level → own new ID
+  c.add(cell({ prop_name: 'Amb', prop_level: 'tier', prop_id: 'amb-1' }));
+  b.add(cell({ prop_name: 'Amb', prop_level: 'tier', prop_id: 'amb-2' }));
+  var cAmb = c.add(cell({ prop_name: 'Amb', prop_level: 'tier' }));                // ambiguous → skipped
+  var ign = a.add(cell({ prop_name: 'Ign', prop_level: 'tier', properties_ignored: 'true' }));
+  a.add(cell({ prop_name: 'NoLevel' }));
+  var plan = sp.planMissingIds(ui([a, b, c], a));
+  var got = {};
+  plan.items.forEach(function(it) { got[it.cell.id] = it.id + (it.reused ? '*' : ''); });
+  assert.strictEqual(got[bBill.id], 'billing*');
+  assert.strictEqual(got[aBill2.id], 'billing-2');
+  assert.strictEqual(got[aQ.id], 'queue');
+  assert.strictEqual(got[bQ.id], 'queue');
+  assert.strictEqual(got[bQ2.id], 'queue-3');
+  assert.strictEqual(got[cQ.id], 'queue');
+  assert.strictEqual(got[cQs.id], 'queue-4');
+  assert(!(cAmb.id in got) && !(ign.id in got));
+  assert.strictEqual(plan.items.length, 7);
+  assert.strictEqual(plan.notices.length, 1);
+  assert(/amb-2, amb-1/.test(plan.notices[0]));
+})();
+
 // --- registry ---
 var warnings = [];
 var origWarn = console.warn; console.warn = function(m) { warnings.push(m); };

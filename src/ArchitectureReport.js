@@ -3,6 +3,7 @@
 var ArchitectureModel      = require('./ArchitectureModel');
 var TechnologyRegistry     = require('./TechnologyRegistry');
 var ValidationReportDialog = require('./ValidationReportDialog');
+var SyncPreviewDialog      = require('./SyncPreviewDialog');
 
 /**
  * ArchitectureReport — export, validation and Confluence push of the whole
@@ -16,6 +17,7 @@ function ArchitectureReport(ui, shapeProps) {
   this.ui = ui;
   this.shapeProps = shapeProps;
   this.reportDialog = new ValidationReportDialog(ui);
+  this.previewDialog = new SyncPreviewDialog(ui, shapeProps);
 }
 
 var NO_ELEMENTS = 'No shapes with ID, Name and Level found in this file.';
@@ -35,6 +37,7 @@ ArchitectureReport.prototype._yaml = function(model) {
  * "Validate model" (specs §10.1): builds the model and shows the report.
  */
 ArchitectureReport.prototype.validate = function(onStatus) {
+  var self  = this;
   var model = this._build();
   if (model.elements.length === 0 && model.findings.length === 0) {
     onStatus(NO_ELEMENTS, true);
@@ -43,7 +46,90 @@ ArchitectureReport.prototype.validate = function(onStatus) {
   this.reportDialog.show({
     title:    'Architecture model validation',
     findings: model.findings,
-    buttons:  [{ label: 'Close', primary: true }],
+    buttons:  this._withFix(model, [{ label: 'Close', primary: true }],
+                            function() { self.validate(onStatus); }),
+  });
+};
+
+/**
+ * Prepends a "Fix N missing IDs" button to a report's buttons when the model
+ * has PP-001 findings (specs §10.7.1). The fix previews the IDs, writes them,
+ * then calls rerun() so the report is rebuilt from the fixed diagram.
+ */
+ArchitectureReport.prototype._withFix = function(model, buttons, rerun, onCancel) {
+  var count = model.findings.filter(function(f) { return f.code === 'PP-001'; }).length;
+  if (count === 0) return buttons;
+  var self = this;
+  return [{
+    label:   'Fix ' + count + ' missing ID' + (count > 1 ? 's' : '') + '…',
+    onClick: function() { self.fixMissingIds(rerun, onCancel); },
+  }].concat(buttons);
+};
+
+/**
+ * Gives every shape with Name and Level but no ID an ID (specs §10.7.1):
+ * shows the planned IDs for confirmation, writes the selected ones (one undo
+ * step per page) and calls onDone() afterwards; onCancel() (optional) when
+ * nothing was written.
+ */
+ArchitectureReport.prototype.fixMissingIds = function(onDone, onCancel) {
+  var ui   = this.ui;
+  var sp   = this.shapeProps;
+  var plan = sp.planMissingIds(ui);
+
+  if (plan.items.length === 0) {
+    this.reportDialog.show({
+      title:    'Fix missing IDs',
+      findings: plan.notices.map(function(n) { return { severity: 'warning', code: 'PP-001', message: n, refs: [] }; }),
+      buttons:  [{ label: 'Close', primary: true, onClick: onCancel }],
+    });
+    return;
+  }
+
+  var items = plan.items.map(function(it) {
+    var others = [];
+    plan.items.forEach(function(o) {
+      if (o !== it && o.id === it.id && others.indexOf(o.pageName) === -1) others.push(o.pageName);
+    });
+    var note = it.reused ? ' — existing element' : '';
+    if (others.length) note += (note ? ', also' : ' — also') + ' set on ' + others.join(', ');
+    return {
+      cell: it.cell, page: it.page, pageName: it.pageName, id: it.id,
+      label:  '"' + it.name + '" (' + sp.getLevelLabel(it.level) + ')',
+      detail: 'ID ' + it.id + note,
+    };
+  });
+
+  this.previewDialog.show(items, function(selected) {
+    if (selected.length === 0) {
+      if (typeof onCancel === 'function') onCancel();
+      return;
+    }
+    var savedPage = ui.currentPage;
+    var byPage = [];
+    selected.forEach(function(it) {
+      var group = byPage.filter(function(g) { return g.page === it.page; })[0];
+      if (!group) byPage.push(group = { page: it.page, items: [] });
+      group.items.push(it);
+    });
+    byPage.forEach(function(g) {
+      if (g.page !== ui.currentPage) ui.selectPage(g.page, true);
+      var graph = ui.editor.graph;
+      graph.model.beginUpdate();
+      try {
+        g.items.forEach(function(it) { sp.setProperty(graph, it.cell, sp.PROP_ID, it.id); });
+      } finally {
+        graph.model.endUpdate();
+      }
+    });
+    if (ui.currentPage !== savedPage) ui.selectPage(savedPage, true);
+    if (typeof onDone === 'function') setTimeout(onDone, 0);
+  }, plan.notices, {
+    title:        'Fix missing IDs',
+    subtitle:     'These shapes have a Name and Level but no ID, so they are not exported. ' +
+                  'Each gets an ID made from its name; copies of one element on several pages share it.',
+    confirmLabel: 'Set IDs',
+    onCancel:     onCancel,
   });
 };
 
@@ -77,10 +163,10 @@ ArchitectureReport.prototype.generate = function(tagName, onStatus) {
   this.reportDialog.show({
     title:    'Export architecture YAML',
     findings: model.findings,
-    buttons:  [
+    buttons:  this._withFix(model, [
       { label: 'Cancel' },
       { label: hasErrors ? 'Export anyway' : 'Export', primary: true, onClick: save },
-    ],
+    ], function() { self.generate(tagName, onStatus); }),
   });
 };
 
@@ -178,10 +264,11 @@ ArchitectureReport.prototype.push = function(cfUploader, onProgress, onDone, tag
   this.reportDialog.show({
     title:    'Push to Confluence',
     findings: model.findings,
-    buttons:  [
+    buttons:  this._withFix(model, [
       { label: 'Cancel', onClick: function() { onDone('Push cancelled — nothing was uploaded.'); } },
       { label: hasErrors ? 'Push anyway' : 'Push', primary: true, onClick: upload },
-    ],
+    ], function() { self.push(cfUploader, onProgress, onDone, tagName); },
+    function() { onDone('Push cancelled — nothing was uploaded.'); }),
   });
 };
 
