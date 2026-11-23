@@ -43,6 +43,7 @@ All data is stored as custom XML attributes on the cell's value, using DrawIO's 
 | `prop_parent`          | Shapes only         | no       | string (an element id) | Explicit parent, used only when the shape is not inside an eligible container on its page (section 4.3). |
 | `prop_technology`      | Node shapes only    | no       | string (registry key) | Technology of the node; a key of the Technology registry (section 19), e.g. `AWS_LAMBDA`. |
 | `prop_provisioning`    | Node shapes only    | no       | string (enum)      | One of `IAC`, `EXTERNAL`, `RUNTIME` (section 4.4).                          |
+| `prop_flow_lift`       | Connectors only     | no       | `"true"` or absent | Export a cross-level connector lifted to the common level of its ends (section 10.5.1). |
 | `properties_ignored`   | Shapes & connectors | no       | boolean (`"true"`) | Marks a cell as explicitly excluded from property management and export.  |
 | `prop_tags`            | Shapes & connectors | no       | string             | Comma-separated tag names (see section 14).                                 |
 
@@ -270,6 +271,8 @@ When a single connector is selected (and not ignored), the panel switches to con
 
 - Below the Connects line, a single grey warning line is shown when the connector would not be exported as a flow, with the reason: an endpoint is anonymous or has no ID, the endpoints are at different abstraction levels (`FLOW-001`), both ends are the same element (`FLOW-009`), or an end is an Organization (`FLOW-010`). These are the same checks as the export (section 10.7).
 
+- On a cross-level connector (`FLOW-001`), a checkbox **Lift to common level — one end is not known in detail** is shown below the Connects line. Ticking it sets `prop_flow_lift="true"` (undoable); unticking removes it. While ticked, the `FLOW-001` warning is replaced by a note that the connector is exported lifted (section 10.5.1). If the flag is set on a connector whose ends are at the same level, the checkbox stays visible with the note *"Has no effect: the ends are not at different levels."* so it can be cleared.
+
   Named endpoints are rendered as blue underlined links. Clicking a link:
   1. Selects the connected shape (triggering the panel to switch to that shape's properties).
   2. Centres the viewport on the shape (`graph.scrollCellToVisible`).
@@ -450,6 +453,24 @@ The same flow `id` used for two different `(from, to)` pairs is an error; the se
 
 Connector `prop_name` is never exported.
 
+#### 10.5.1 Lifted flows
+
+A connector between elements at different levels usually means that one end is not known in detail yet, e.g. a Service of System X is known to talk to System Y, but not to which part of Y. Rather than inventing an element, the connector can be **lifted** (`prop_flow_lift="true"`, section 5.7). This is the metamodel's upward projection (metamodel §7.1) applied to the connector. The amendment accepted for this purpose adds the flow fields `declared` and `lifted_from` (10.6.3).
+
+**Lifting.** Only connectors that would otherwise fail `FLOW-001` are lifted; the flag has no effect on any other connector. The deeper end is replaced by its parent (the merged `parent` of 10.4), repeatedly, until both ends are at the same rank. If the parent climb overshoots (e.g. a Node directly in a Software System towards a Service), the other end climbs in turn, so both always meet at the deepest common rank.
+
+| Result | Effect |
+|---|---|
+| Both ends reach the same rank | The connector is added to the flow between the lifted ends, as an entry of its `lifted_from` list. Reported as advisory `PP-010`. |
+| An element on the way has no exported parent (or is in a parent cycle) | Not exported, error `PP-011`. |
+| Both ends lift to the same element (e.g. a Service towards its own System) | Not exported, error `FLOW-009`. |
+
+**Merging.** A lifted flow merges with connectors drawn directly between the lifted ends: their `id` and `description` stay on the flow; the lifted connectors become `lifted_from` entries. A flow with no direct connector — one that exists only through lifting — is exported with `declared: false`. Lifted connectors with the same original `(from, to)` (e.g. on several pages) form one entry; its `id` and `description` follow the rules of 10.5, and entry IDs share the flow ID namespace (`PP-008`, `PP-009`).
+
+**Superseded lifts.** A lift is only used where a connection is not already modelled at a single level. When a valid flow drawn directly (not lifted) links the entry's `from` (or an element below it) to the entry's `to` (or an element below it) — e.g. the entry `service-xa → system-y` and the flow `service-xa → service-y1` — the entry is left out and reported as advisory `PP-012`: the lower-level flow already projects onto the same pair. A lifted flow left without entries and without direct connectors is not exported.
+
+Lifted flows count as flows for the Workflow rules (10.7).
+
 ### 10.6 YAML structure
 
 The file is YAML 1.2, UTF-8. Strings that could be misread as another YAML type (numbers, booleans, dates, text with `:`/`#`/quotes, non-ASCII) are emitted double-quoted; multi-line descriptions are emitted as literal blocks (`|-`). Fields with no value are **omitted** (never written as `null`). An empty list is written as `[]`.
@@ -465,7 +486,7 @@ The file starts with a comment header, then the document:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `modelVersion` | integer | Always `1` (Architecture Metamodel V1). |
+| `modelVersion` | integer | Always `1` (Architecture Metamodel V1, with the lifted-flow amendment of 10.5.1). |
 | `technologyRegistry` | map | `name` and `version` of the loaded architecture configuration (section 19). Omitted when no configuration is loaded. |
 | `elements` | list | The merged elements (10.4). |
 | `flows` | list | The merged, valid flows (10.5). |
@@ -493,7 +514,22 @@ Fields are emitted in this order; absent ones are omitted.
 | `id` | when set | The flow ID (10.5). |
 | `from` | always | `id` of the source element. |
 | `to` | always | `id` of the target element. |
+| `declared` | only when `false` | `false` when the flow exists only through lifted connectors (10.5.1). Omitted for flows drawn directly. |
 | `description` | when non-empty | The flow description (10.5). |
+| `lifted_from` | when lifted connectors exist | List of the original connections lifted onto this flow (10.5.1), each with `id` (when set), `from`, `to` and `description` (when non-empty) — the original, cross-level ends. Sorted by `from`, then `to`. |
+
+Example:
+
+```yaml
+  - from: system-x
+    to: system-y
+    declared: false
+    lifted_from:
+      - id: xa-to-y
+        from: service-xa
+        to: system-y
+        description: Orders
+```
 
 **Order.** By the rank of `from` (Software System flows first, Node flows last), then by `from`, then by `to`.
 
@@ -578,11 +614,14 @@ Building the model produces a list of **findings**. Each finding has a severity,
 | `PP-005` | Warning | No technology registry loaded — technologies were not checked (reported once) | — |
 | `PP-006` | Error | Provisioning is not `IAC`, `EXTERNAL` or `RUNTIME` | Exported as is. |
 | `PP-007` | Warning | Connector end is dangling or on a non-exported shape | Connector not exported. |
-| `FLOW-001` | Error | Flow between different abstraction levels | Flow not exported. |
-| `FLOW-009` | Error | Flow from an element to itself | Flow not exported. |
+| `FLOW-001` | Error | Flow between different abstraction levels, connector not marked to be lifted | Flow not exported. |
+| `FLOW-009` | Error | Flow from an element to itself, also when a lifted connector's ends lift to the same element | Flow not exported. |
 | `FLOW-010` | Error | Flow to or from an Organization | Flow not exported. |
 | `PP-008` | Error | Several different flow IDs on one `(from, to)` pair, or one flow ID on several pairs | See 10.5. |
-| `PP-009` | Warning | Connectors of one flow have different descriptions | First used. |
+| `PP-009` | Warning | Connectors of one flow (or one lifted entry) have different descriptions | First used. |
+| `PP-010` | Advisory | A cross-level connector is exported lifted (10.5.1) | Added under `lifted_from` of the lifted flow. |
+| `PP-011` | Error | A connector marked to be lifted cannot be lifted: an end is not an exported element, or has no parent to climb through | Connector not exported. |
+| `PP-012` | Advisory | A lifted connector is already modelled by a flow drawn at a single level (10.5.1) | Entry left out. |
 | `WF-001` | Error | Workflow contains no Service | — |
 | `WF-003` | Error | In a multi-Service Workflow, a Service takes part in no internal flow (a Service flow whose other end is in the same Workflow) | — |
 | `WF-004` | Error | A multi-Service Workflow's internal Service flows, ignoring direction, do not connect all its Services | — |

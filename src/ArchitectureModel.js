@@ -10,7 +10,7 @@ var SEVERITY_ORDER = { error: 0, warning: 1, advisory: 2 };
 /**
  * Returns {
  *   elements: [ {id, name, type, parent?, technology?, provisioning?, description?} ],
- *   flows:    [ {id?, from, to, description?} ],
+ *   flows:    [ {id?, from, to, declared?, description?, lifted_from?: [{id?, from, to, description?}]} ],
  *   findings: [ {severity, code, message, refs: [{page, pageName, cell}]} ],
  *   registry: {name, version} | null,
  * }
@@ -187,8 +187,41 @@ function buildModel(ui, sp, registry) {
   // -------------------------------------------------------------------------
   // 10.5 Flows
   // -------------------------------------------------------------------------
+  // Lifting (10.5.1): climbs the deeper end of a cross-level pair through the
+  // merged parents until both ends are at the same rank. Returns {from, to},
+  // or {stuck: id} when an element on the way has no usable parent.
+  function lift(from, to) {
+    for (var steps = 0; steps < 2 * sp.LEVELS.length; steps++) {
+      var rf = sp.getLevelRank(elements[from].type), rt = sp.getLevelRank(elements[to].type);
+      if (rf === rt) return { from: from, to: to };
+      var deeper = rf > rt ? from : to;
+      var p = elements[deeper].parent;
+      if (p === undefined || !elements[p] || inCycle[deeper]) return { stuck: deeper };
+      if (deeper === from) from = p; else to = p;
+    }
+    return { stuck: from };
+  }
+
   var reportedFlowProblems = {};
+  function reportOnce(code, from, to, message, o) {
+    var pkey = code + '\0' + from + '\0' + to;
+    if (reportedFlowProblems[pkey]) return;
+    reportedFlowProblems[pkey] = true;
+    report('error', code, message, [ref(o)]);
+  }
+
+  // pairs: (from, to) of the exported flow. occ = connectors drawn at that
+  // level; lifted = cross-level connectors lifted onto it, by original pair.
   var pairs = {}, pairOrder = [];
+  function pairFor(from, to) {
+    var key = from + '\0' + to;
+    if (!pairs[key]) {
+      pairs[key] = { key: key, from: from, to: to, occ: [], lifted: {}, liftedOrder: [] };
+      pairOrder.push(key);
+    }
+    return pairs[key];
+  }
+
   sp.forEachPage(ui, function(page, pageName, root) {
     sp.walkCells(root, function(e) {
       if (!e.edge || sp.isIgnored(e)) return;
@@ -199,27 +232,74 @@ function buildModel(ui, sp, registry) {
         return;
       }
       var from = sp.getProperty(e.source, sp.PROP_ID), to = sp.getProperty(e.target, sp.PROP_ID);
-      if (problem) {
-        var pkey = problem.code + '\0' + from + '\0' + to;
-        if (!reportedFlowProblems[pkey]) {
-          reportedFlowProblems[pkey] = true;
-          report('error', problem.code, 'Flow "' + from + '" → "' + to + '": ' + problem.message + ' Not exported.', [ref(o)]);
+      var at = 'Flow "' + from + '" → "' + to + '": ';
+
+      if (problem && problem.code === 'FLOW-001' && sp.isFlowLifted(e)) {
+        if (!elements[from] || !elements[to]) {
+          reportOnce('PP-011', from, to, at + 'cannot be lifted — "' + (elements[from] ? to : from) +
+                     '" is not an exported element. Not exported.', o);
+          return;
         }
+        var l = lift(from, to);
+        if (l.stuck) {
+          reportOnce('PP-011', from, to, at + 'cannot be lifted — "' + l.stuck + '" has no parent to lift through. ' +
+                     'Not exported.', o);
+          return;
+        }
+        if (l.from === l.to) {
+          reportOnce('FLOW-009', from, to, at + 'both ends lift to "' + l.from + '", a flow to itself. Not exported.', o);
+          return;
+        }
+        var lp = pairFor(l.from, l.to);
+        var lkey = from + '\0' + to;
+        if (!lp.lifted[lkey]) { lp.lifted[lkey] = { from: from, to: to, occ: [] }; lp.liftedOrder.push(lkey); }
+        lp.lifted[lkey].occ.push(o);
         return;
       }
-      var key = from + '\0' + to;
-      if (!pairs[key]) { pairs[key] = { from: from, to: to, occ: [] }; pairOrder.push(key); }
-      pairs[key].occ.push(o);
+
+      if (problem) {
+        var hint = problem.code === 'FLOW-001'
+          ? ' If one end is not known in detail, tick "Lift to common level" on the connector.' : '';
+        reportOnce(problem.code, from, to, at + problem.message + hint + ' Not exported.', o);
+        return;
+      }
+      pairFor(from, to).occ.push(o);
     });
   });
 
-  var flows = [];
-  var flowIdOwner = {};          // flow id -> pair key
+  // An element and everything below it, through the merged parents.
+  function isSelfOrBelow(id, ancestor) {
+    for (var n = 0; id !== undefined && elements[id] && n <= sp.LEVELS.length; n++) {
+      if (id === ancestor) return true;
+      id = elements[id].parent;
+    }
+    return false;
+  }
+
+  // A lifted connection is superseded when a connector drawn at a single level
+  // already links its ends (or elements below them): that flow projects onto
+  // the same pair, so the lift adds nothing (specs §10.5.1).
+  var declaredPairs = pairOrder.map(function(k) { return pairs[k]; })
+                               .filter(function(p) { return p.occ.length > 0; });
   pairOrder.forEach(function(key) {
     var pair = pairs[key];
-    var flow = { from: pair.from, to: pair.to };
+    pair.liftedOrder = pair.liftedOrder.filter(function(lkey) {
+      var entry = pair.lifted[lkey];
+      var by = declaredPairs.filter(function(d) {
+        return isSelfOrBelow(d.from, entry.from) && isSelfOrBelow(d.to, entry.to);
+      })[0];
+      if (!by) return true;
+      report('advisory', 'PP-012', 'Lifted connection "' + entry.from + '" → "' + entry.to + '" is already modelled as "' +
+             by.from + '" → "' + by.to + '" — the lifted connector is left out and can be removed.',
+             entry.occ.map(ref).concat([ref(by.occ[0])]));
+      return false;
+    });
+  });
 
-    var ids = distinct(pair.occ, function(o) {
+  var flowIdOwner = {};          // flow id -> label of its owner
+  // id + description from a group of connectors (a flow or a lifted entry).
+  function idAndDescription(occs, what, target) {
+    var ids = distinct(occs, function(o) {
       var id = sp.getProperty(o.cell, sp.PROP_ID);
       if (id && !sp.isValidId(id)) {
         report('error', 'PP-002', 'Connector ' + _connectorLabel(sp, o.cell) + ' has an invalid ID "' + id + '" — ID ignored.', [ref(o)]);
@@ -228,30 +308,52 @@ function buildModel(ui, sp, registry) {
       return id;
     });
     if (ids.length > 1) {
-      report('error', 'PP-008', 'Flow "' + pair.from + '" → "' + pair.to + '" has several IDs (' +
+      report('error', 'PP-008', what + ' has several IDs (' +
              ids.map(function(i) { return '"' + i.value + '"'; }).join(', ') + ') — the first is used.',
              ids.map(function(i) { return ref(i.o); }));
     }
     if (ids.length) {
       var fid = ids[0].value;
       if (flowIdOwner[fid] !== undefined) {
-        var owner = pairs[flowIdOwner[fid]];
-        report('error', 'PP-008', 'Flow ID "' + fid + '" is used for "' + owner.from + '" → "' + owner.to +
-               '" and "' + pair.from + '" → "' + pair.to + '" — the second is exported without ID.', [ref(ids[0].o)]);
+        report('error', 'PP-008', 'Flow ID "' + fid + '" is used for ' + flowIdOwner[fid] + ' and ' + what +
+               ' — the second is exported without ID.', [ref(ids[0].o)]);
       } else {
-        flowIdOwner[fid] = key;
-        flow.id = fid;
+        flowIdOwner[fid] = what;
+        target.id = fid;
       }
     }
 
-    var descs = distinct(pair.occ, function(o) { return _trimmed(sp.getProperty(o.cell, sp.PROP_DESCRIPTION)); });
+    var descs = distinct(occs, function(o) { return _trimmed(sp.getProperty(o.cell, sp.PROP_DESCRIPTION)); });
     if (descs.length > 1) {
-      report('warning', 'PP-009', 'Flow "' + pair.from + '" → "' + pair.to + '" has different descriptions on ' +
+      report('warning', 'PP-009', what + ' has different descriptions on ' +
              _pageList(descs) + ' — the first is used.',
              descs.map(function(d) { return ref(d.o); }));
     }
-    if (descs.length) flow.description = sp.getProperty(descs[0].o.cell, sp.PROP_DESCRIPTION).trim();
+    if (descs.length) target.description = sp.getProperty(descs[0].o.cell, sp.PROP_DESCRIPTION).trim();
+  }
 
+  var flows = [];
+  pairOrder.forEach(function(key) {
+    var pair = pairs[key];
+    if (pair.occ.length === 0 && pair.liftedOrder.length === 0) return;   // all lifts superseded
+    var flow = { from: pair.from, to: pair.to };
+    idAndDescription(pair.occ, 'Flow "' + pair.from + '" → "' + pair.to + '"', flow);
+    if (pair.occ.length === 0) flow.declared = false;
+
+    if (pair.liftedOrder.length) {
+      flow.lifted_from = pair.liftedOrder.map(function(lkey) {
+        var e = pair.lifted[lkey];
+        var entry = { from: e.from, to: e.to };
+        idAndDescription(e.occ, 'Lifted connection "' + e.from + '" → "' + e.to + '"', entry);
+        report('advisory', 'PP-010', 'Connection "' + e.from + '" → "' + e.to + '" (' +
+               sp.getLevelLabel(elements[e.from].type) + ' → ' + sp.getLevelLabel(elements[e.to].type) +
+               ') is exported lifted to "' + pair.from + '" → "' + pair.to + '".', e.occ.map(ref));
+        return entry;
+      }).sort(function(a, b) {
+        if (a.from !== b.from) return a.from < b.from ? -1 : 1;
+        return a.to < b.to ? -1 : (a.to > b.to ? 1 : 0);
+      });
+    }
     flows.push(flow);
   });
 
@@ -353,13 +455,15 @@ function _publicElement(el) {
   return out;
 }
 
-// Field order of specs §10.6.3: id, from, to, description.
+// Field order of specs §10.6.3: id, from, to, declared, description, lifted_from.
 function _publicFlow(f) {
   var out = {};
   if (f.id !== undefined) out.id = f.id;
   out.from = f.from;
   out.to = f.to;
+  if (f.declared === false) out.declared = false;
   if (f.description !== undefined) out.description = f.description;
+  if (f.lifted_from) out.lifted_from = f.lifted_from.map(_publicFlow);
   return out;
 }
 
@@ -432,6 +536,7 @@ function _yamlValue(val, indent) {
 
 function _yamlScalar(val, indent) {
   if (val === null || val === undefined) return 'null';
+  if (typeof val === 'boolean') return String(val);
   if (typeof val === 'number' && isFinite(val)) return String(val);
   var s = String(val);
 

@@ -93,7 +93,7 @@ src/ConfluenceUploader.js  Confluence credential management, page URL
 
 ### Property storage
 
-Custom properties are stored as XML attributes on the cell's value node — the same mechanism DrawIO uses natively. Keys: `prop_id`, `prop_name`, `prop_level`, `prop_description`, `prop_parent`, `properties_ignored`, `prop_tags`, plus the Node-only `prop_technology` and `prop_provisioning`.
+Custom properties are stored as XML attributes on the cell's value node — the same mechanism DrawIO uses natively. Keys: `prop_id`, `prop_name`, `prop_level`, `prop_description`, `prop_parent`, `properties_ignored`, `prop_tags`, plus the Node-only `prop_technology` and `prop_provisioning`, and the connector-only `prop_flow_lift` (lifted cross-level flows, specs §10.5.1).
 
 - **Identity:** `prop_id` is the element's stable ID (required for shapes, optional for connectors). The same ID on several pages = the same element; the export merges them.
 - **Hierarchy:** level slugs and their legal parents are defined in `ShapeProperties.LEVELS` (`parents` arrays — the single source of truth; a Node may sit in a Service or directly in a Software System). `rank` is only for ordering and the same-level rule on flows. Parent resolution: nearest eligible container in the model tree, else `prop_parent` (`resolveParent`).

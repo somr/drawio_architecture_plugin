@@ -1013,12 +1013,49 @@ PropertiesPanel.prototype._updateConnectorEndpoints = function(cell) {
 
   // Why this connector would not be exported as a flow (specs §5.7).
   var problem = sp.getFlowProblem(cell);
-  if (problem) {
+  var lifted  = sp.isFlowLifted(cell);
+  var crossLevel = problem && problem.code === 'FLOW-001';
+  if (problem && !(crossLevel && lifted)) {
     var warn = document.createElement('div');
     warn.textContent = '⚠ ' + problem.message;
     warn.title = problem.code;
     warn.style.cssText = 'font-size:10px;color:#999;margin-top:4px;line-height:1.3;';
     div.appendChild(warn);
+  }
+
+  // Lift option (specs §5.7, §10.5.1): offered on cross-level connectors, and
+  // kept visible while set so a stale flag can be cleared.
+  if (crossLevel || lifted) {
+    var liftLabel = document.createElement('label');
+    liftLabel.style.cssText = 'display:flex;align-items:flex-start;gap:4px;font-size:11px;color:#444;' +
+                              'margin-top:6px;cursor:pointer;line-height:1.3;';
+    var liftBox = document.createElement('input');
+    liftBox.type = 'checkbox';
+    liftBox.checked = lifted;
+    liftBox.style.margin = '1px 0 0';
+    var liftText = document.createElement('span');
+    liftText.textContent = 'Lift to common level — one end is not known in detail';
+    liftLabel.title = 'Export this connector as a flow between the ancestors of its ends that are at the same level, ' +
+                      'recording this connector under lifted_from.';
+    liftLabel.appendChild(liftBox);
+    liftLabel.appendChild(liftText);
+    div.appendChild(liftLabel);
+
+    var note = document.createElement('div');
+    note.style.cssText = 'font-size:10px;color:#999;margin-top:2px;line-height:1.3;';
+    if (lifted && crossLevel) {
+      note.textContent = 'Exported as a flow between the ends’ common-level parents; shown as an advisory in the validation report.';
+    } else if (lifted) {
+      note.textContent = 'Has no effect: the ends are not at different levels.';
+    }
+    if (note.textContent) div.appendChild(note);
+
+    liftBox.addEventListener('change', function() {
+      var graph = self.ui.editor.graph;
+      if (liftBox.checked) sp.setProperty(graph, cell, sp.PROP_FLOW_LIFT, 'true');
+      else                 sp.removeProperty(graph, cell, sp.PROP_FLOW_LIFT);
+      self._updateConnectorEndpoints(cell);
+    });
   }
 };
 

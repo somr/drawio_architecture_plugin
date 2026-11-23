@@ -10,6 +10,9 @@ var PROP_TECHNOLOGY   = 'prop_technology';
 var PROP_PROVISIONING = 'prop_provisioning';
 var PROP_ID           = 'prop_id';
 var PROP_PARENT       = 'prop_parent';
+// Connector only: 'true' = export a cross-level connector lifted to the common
+// level of its ends (specs §10.5.1). Absent = normal connector.
+var PROP_FLOW_LIFT    = 'prop_flow_lift';
 
 // Optional properties that apply only to shapes at NODE_LEVEL (specs §4.4).
 var NODE_LEVEL = 'node';
@@ -945,6 +948,14 @@ function _endpointProblem(terminal, which) {
 }
 
 /**
+ * True when the connector is marked to be exported lifted to the common level
+ * of its ends (specs §10.5.1). Only has an effect on FLOW-001 connectors.
+ */
+function isFlowLifted(edge) {
+  return getProperty(edge, PROP_FLOW_LIFT) === 'true';
+}
+
+/**
  * Why a connector would not be exported as a flow, or null if it would.
  * Returns { code, message }. Ignored connectors return null (excluding them is
  * deliberate, not a problem). Works on edges of any page.
@@ -999,6 +1010,7 @@ module.exports = {
   PROP_PROVISIONING,
   PROP_ID,
   PROP_PARENT,
+  PROP_FLOW_LIFT,
   NODE_LEVEL,
   NODE_ONLY_PROPS,
   ORGANIZATION_LEVEL,
@@ -1030,6 +1042,7 @@ module.exports = {
   collectElements,
   getParentCandidates,
   getFlowProblem,
+  isFlowLifted,
   forEachPage: _forEachPage,
   walkCells: _walk,
   getAbsoluteBounds,

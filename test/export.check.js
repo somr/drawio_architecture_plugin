@@ -232,4 +232,97 @@ assert(m4.findings.some(function(f) { return f.code === 'FLOW-009'; }));
 assert.deepStrictEqual(m4.flows.map(function(f) { return f.from + '>' + f.to; }), ['svc>svc2']);
 assert.strictEqual(m4.elements.filter(function(e) { return e.id === 'svc'; })[0].parent, 'tt');
 
+// ---------------------------------------------------------------------------
+// Lifted flows (specs §10.5.1)
+// ---------------------------------------------------------------------------
+(function() {
+  var L = makePage('Lift'), L2 = makePage('Lift2');
+  var org = L.shape('o', 'O', 'organization');
+  var sx = L.shape('system-x', 'X', 'software-system', org);
+  var sy = L.shape('system-y', 'Y', 'software-system', org);
+  var wx = L.shape('wx', 'WX', 'workflow', sx);
+  var xa = L.shape('service-xa', 'XA', 'service', wx);
+  var xb = L.shape('service-xb', 'XB', 'service', wx);
+  L.edge(xa, xb);
+  var na = L.shape('node-a', 'NA', 'node', xa);
+  var shared = L.shape('shared', 'Shared', 'node', sx);
+  var lift = { prop_flow_lift: 'true' };
+
+  L.edge(xa, sy, Object.assign({ prop_id: 'xa-to-y', prop_description: 'Orders' }, lift)); // → system-x > system-y
+  L2.edge(L2.shape('service-xa', 'XA', 'service', null, { prop_parent: 'wx' }),
+          L2.shape('system-y', 'Y', 'software-system', null, { prop_parent: 'o' }), lift);  // same entry, other page
+  L.edge(na, sy, lift);                                   // second entry, from a Node
+  L.edge(sx, xb);                                         // FLOW-001 without flag → error + hint
+  L.edge(xa, sx, lift);                                   // lifts to system-x > system-x → FLOW-009
+  L.edge(shared, xb, lift);                               // node in system vs service: both climb → self → FLOW-009
+  var lone = L.shape('lone', 'Lone', 'service');          // no parent
+  L.edge(lone, sy, lift);                                 // PP-011
+  L.edge(xb, xa, lift);                                   // same level: flag has no effect
+
+  var m = AM.buildModel(ui([L, L2]), sp, REGISTRY);
+  var byPair = {};
+  m.flows.forEach(function(f) { byPair[f.from + '>' + f.to] = f; });
+  var xy = byPair['system-x>system-y'];
+  assert(xy, 'lifted flow exported');
+  assert.strictEqual(xy.declared, false);
+  assert.strictEqual(xy.id, undefined);
+  assert.deepStrictEqual(xy.lifted_from, [
+    { from: 'node-a', to: 'system-y' },
+    { id: 'xa-to-y', from: 'service-xa', to: 'system-y', description: 'Orders' },
+  ]);
+  assert(byPair['service-xb>service-xa'] && byPair['service-xb>service-xa'].declared === undefined);
+  var codes = m.findings.map(function(f) { return f.code; });
+  assert.strictEqual(codes.filter(function(c) { return c === 'PP-010'; }).length, 2);
+  assert.strictEqual(codes.filter(function(c) { return c === 'FLOW-009'; }).length, 2);
+  assert(codes.indexOf('PP-011') !== -1);
+  var f1 = m.findings.filter(function(f) { return f.code === 'FLOW-001'; });
+  assert.strictEqual(f1.length, 1);
+  assert(/Lift to common level/.test(f1[0].message));
+  assert(!m.flows.some(function(f) { return f.from === f.to; }));
+
+  var y = AM.toYaml(m);
+  assert(y.indexOf([
+    '  - from: system-x',
+    '    to: system-y',
+    '    declared: false',
+    '    lifted_from:',
+    '      - from: node-a',
+    '        to: system-y',
+    '      - id: xa-to-y',
+    '        from: service-xa',
+    '        to: system-y',
+    '        description: Orders',
+  ].join('\n')) !== -1, 'lifted YAML layout:\n' + y);
+
+  // A declared system-level flow keeps its own fields; entries attach to it.
+  L.edge(sx, sy, { prop_id: 'x-to-y' });
+  m = AM.buildModel(ui([L, L2]), sp, REGISTRY);
+  xy = m.flows.filter(function(f) { return f.from === 'system-x' && f.to === 'system-y'; })[0];
+  assert.strictEqual(xy.id, 'x-to-y');
+  assert.strictEqual(xy.declared, undefined);
+  assert.strictEqual(xy.lifted_from.length, 2);
+
+  // Superseded: a Service-level flow from service-xa into Y covers the
+  // service-xa entry (PP-012) but not the node-a one.
+  var yb = L.shape('yb', 'YB', 'tier', sy);
+  var y1 = L.shape('service-y1', 'Y1', 'service', yb);
+  L.edge(xa, y1);
+  m = AM.buildModel(ui([L, L2]), sp, REGISTRY);
+  xy = m.flows.filter(function(f) { return f.from === 'system-x' && f.to === 'system-y'; })[0];
+  assert.deepStrictEqual(xy.lifted_from.map(function(e) { return e.from; }), ['node-a']);
+  assert.strictEqual(m.findings.filter(function(f) { return f.code === 'PP-012'; }).length, 1);
+
+  // Only superseded entries and no declared connector → the flow disappears.
+  var S = makePage('S');
+  var so = S.shape('o', 'O', 'organization');
+  var s1 = S.shape('s1', 'S1', 'software-system', so), s2 = S.shape('s2', 'S2', 'software-system', so);
+  var t1 = S.shape('t1', 'T1', 'tier', s1), t2 = S.shape('t2', 'T2', 'tier', s2);
+  var a1 = S.shape('a1', 'A1', 'service', t1), b2 = S.shape('b2', 'B2', 'service', t2);
+  S.edge(a1, s2, lift);
+  S.edge(a1, b2);
+  m = AM.buildModel(ui([S]), sp, REGISTRY);
+  assert.deepStrictEqual(m.flows.map(function(f) { return f.from + '>' + f.to; }), ['a1>b2']);
+  assert.deepStrictEqual(m.findings.map(function(f) { return f.code; }), ['PP-012']);
+})();
+
 console.log('all export checks passed');
