@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.13.0)
+# DrawIO Architecture Properties Plugin (v1.14.0)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured architecture properties to diagram shapes and connectors, enforces the architecture hierarchy, and exports the whole diagram as a model conforming to the **Architecture Metamodel V1** ([`docs/architecture-metamodel.md`](docs/architecture-metamodel.md)).
 
@@ -65,6 +65,7 @@ When nothing is selected, the panel shows:
 
 - **Export architecture YAML** — builds the model of the **whole file**, validates it, and offers `{diagramname}.yaml` for saving (DrawIO's save dialog opens; it starts in your Downloads folder).
 - **Validate model** — the same checks, without exporting.
+- **Generate model page** — draws the whole model as a hierarchy tree on a page named *Architecture Model*: one box per element, coloured by level, with a red (errors) or orange (warnings) border when validation found problems with it; hover for the messages, click the link to go to the page it is drawn on. The page is wiped and redrawn on every run (edits there are lost) and is never read back into the model. Flows are not drawn yet.
 
 Problems are listed in a report dialog grouped into errors, warnings and advisories, with the metamodel's rule codes (`HIER-001`, `FLOW-001`, `WF-004`, …). Click a line to jump to the shape. Validation never blocks the export: **Export anyway** writes the model as drawn, leaving out only what would make it invalid YAML (unresolvable references, duplicate IDs, invalid flows).
 

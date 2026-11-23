@@ -4,6 +4,13 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.14.0] — 2026-11-23
+
+### Added
+- **Generate model page** — a new empty-state button draws the merged model of the whole file as a top-down hierarchy tree on a page named *Architecture Model*. Boxes show name, level, ID (and technology · provisioning for Nodes), are coloured by level and bordered red / orange / blue by their worst validation finding, with the messages in the tooltip and a link to the page the element is drawn on. Leaf children are stacked in a column to keep the tree narrow; elements without a resolvable parent start trees of their own. The page is wiped and redrawn on every run and is skipped by export, validation, push and sync. Flows are not drawn yet (specs §10.9).
+
+---
+
 ## [1.13.0] — 2026-11-23
 
 ### Added
