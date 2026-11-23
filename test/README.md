@@ -8,6 +8,7 @@ node test/model.check.js    # ShapeProperties + TechnologyRegistry: hierarchy, I
                             # parent resolution, adoption, sync props, flow checks
 node test/export.check.js   # ArchitectureModel: metamodel §18 example over two pages
                             # (zero findings, YAML layout) + every validation code
+node test/modelpage.check.js # ModelDiagram tree layout + model page skipped by forEachPage
 ```
 
 Each prints `all … checks passed` or throws on the first failed assertion.

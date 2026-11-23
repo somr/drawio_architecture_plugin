@@ -13,6 +13,9 @@ var PROP_PARENT       = 'prop_parent';
 // Connector only: 'true' = export a cross-level connector lifted to the common
 // level of its ends (specs §10.5.1). Absent = normal connector.
 var PROP_FLOW_LIFT    = 'prop_flow_lift';
+// Marks every cell of the generated model page (specs §10.9). A page holding
+// such a cell is skipped by forEachPage, so it never feeds back into the model.
+var PROP_MODEL_VIEW   = 'pp_model_view';
 
 // Optional properties that apply only to shapes at NODE_LEVEL (specs §4.4).
 var NODE_LEVEL = 'node';
@@ -671,12 +674,33 @@ function _pageName(page) {
   return page.getName ? page.getName() : (page.name || '(unnamed page)');
 }
 
-/** Calls fn(page, pageName, root) for every page, in tab order. */
+/** True when the cell belongs to the generated model page (specs §10.9). */
+function isModelViewCell(cell) {
+  return getProperty(cell, PROP_MODEL_VIEW) === '1';
+}
+
+/** True when the page is the generated model page: a layer holds a marked cell. */
+function isModelViewPage(ui, page) {
+  var root = _pageRoot(ui, page);
+  var layers = (root && root.children) || [];
+  for (var i = 0; i < layers.length; i++) {
+    var cells = layers[i].children || [];
+    for (var j = 0; j < cells.length; j++) {
+      if (isModelViewCell(cells[j])) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Calls fn(page, pageName, root) for every page, in tab order, except the
+ * generated model page (specs §10.9).
+ */
 function _forEachPage(ui, fn) {
   var pages = (ui && ui.pages && ui.pages.length) ? ui.pages : (ui && ui.currentPage ? [ui.currentPage] : []);
   pages.forEach(function(page) {
     var root = _pageRoot(ui, page);
-    if (root) fn(page, _pageName(page), root);
+    if (root && !isModelViewPage(ui, page)) fn(page, _pageName(page), root);
   });
 }
 
@@ -1044,6 +1068,9 @@ module.exports = {
   getFlowProblem,
   isFlowLifted,
   forEachPage: _forEachPage,
+  PROP_MODEL_VIEW,
+  isModelViewCell,
+  isModelViewPage,
   walkCells: _walk,
   getAbsoluteBounds,
   fullyContains,

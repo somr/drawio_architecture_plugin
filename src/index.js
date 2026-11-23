@@ -76,6 +76,12 @@ Draw.loadPlugin(function(ui) {
 
     var cell = cells[0];
 
+    // The generated model page is output only (specs §10.9).
+    if (ShapeProperties.isModelViewCell(cell)) {
+      panel.setEmpty();
+      return;
+    }
+
     // Connectors have no required properties, so the popup is never shown
     // for them (specs §6.1); they are edited and ignored from the panel.
     if (graph.model.isEdge(cell)) {

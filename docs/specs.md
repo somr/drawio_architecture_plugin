@@ -383,12 +383,13 @@ The export writes the **whole `.drawio` file** — all pages — as one architec
 
 ### 10.1 Trigger
 
-Two buttons are shown at the bottom of the Properties tab **only when nothing is selected** (empty state). They are hidden in all other states.
+Three buttons are shown at the bottom of the Properties tab **only when nothing is selected** (empty state). They are hidden in all other states.
 
 | Button | Action |
 |---|---|
 | **Export architecture YAML** | Builds and validates the model (10.3–10.7), shows the validation report if there are findings, then offers the YAML file for saving (10.2). |
 | **Validate model** | Builds and validates the model and shows the validation report (10.7). Writes nothing. |
+| **Generate model page** | Builds and validates the model and draws it as a hierarchy tree on the generated model page (10.9). |
 
 ### 10.2 Output file
 
@@ -660,6 +661,25 @@ Messages are shown in the panel status line next to the button.
 | No eligible shapes in the file | "No shapes with ID, Name and Level found in this file." Nothing else happens. |
 | Report dialog cancelled | Nothing happens. |
 | Download started | "Choose where to save {filename}." (Saving or cancelling in the save dialog is not reported back.) |
+
+### 10.9 Generated model page
+
+**Generate model page** (10.1) draws the merged model (10.3–10.7) as a top-down hierarchy tree on a page named **Architecture Model**. The page is output only:
+
+- **Re-created on every run.** The first run adds the page at the end of the file; later runs find it, delete everything on it (all layers) and draw it again. Hand edits on the page are lost. Wiping and redrawing is one undo step (adding the page is a separate one). The page is shown afterwards.
+- **Identification.** Every cell on the page carries `pp_model_view="1"`. A page with such a cell is the model page, whatever its name, so renaming it is fine.
+- **Excluded from the model.** The model page is skipped wherever the plugin reads pages: export, validation, Confluence push, cross-page matching, sync and the missing-ID fix. Selecting one of its cells shows the empty panel state and never opens the missing-properties popup.
+
+**Tree.** One box per exported element, linked to its parent by a plain connector. Children follow the export order. A parent whose children are all leaves gets them stacked in one indented column below it (org-chart style) to keep the tree narrow; otherwise children are laid out side by side, centred under the parent. Elements without a parent, with an unresolved parent (`REF-001`) or in a parent cycle (`HIER-004`) start trees of their own, placed to the right. Flows are not drawn.
+
+**Box.** Name (bold), level and ID; for Nodes also technology · provisioning. Fill colour by level. When the element has findings (a finding whose shapes include one carrying the element's ID — flow findings are therefore not shown), the border is red for errors, orange for warnings or blue for advisories (the worst one counts), and a line gives the count of the worst severity. The tooltip holds the description, the pages the element is drawn on and the full finding messages. The box links to the first page the element is drawn on (`data:page/id,…`).
+
+**Title** above the tree: file name, date, element count, error and warning counts, and a note that the page is generated.
+
+| Condition | Behaviour |
+|-----------|-----------|
+| No eligible shapes in the file | "No shapes with ID, Name and Level found in this file." The page is not touched. |
+| Page drawn | "Model page updated: N elements, E error(s), W warning(s)." |
 
 ---
 

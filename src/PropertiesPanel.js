@@ -1060,8 +1060,8 @@ PropertiesPanel.prototype._updateConnectorEndpoints = function(cell) {
 };
 
 /**
- * Export / Validate buttons (specs §10.1), shown only in the empty state.
- * this.reportBtn is the wrapper holding both, so the panel states can show or
+ * Export / Validate / Generate model page buttons (specs §10.1, §10.9), shown
+ * only in the empty state. this.reportBtn is the wrapper holding them, so the panel states can show or
  * hide them together.
  */
 PropertiesPanel.prototype._buildReportButton = function(container) {
@@ -1100,6 +1100,12 @@ PropertiesPanel.prototype._buildReportButton = function(container) {
     'width:100%',
   ].join(';');
 
+  var modelPageBtn = document.createElement('button');
+  modelPageBtn.textContent = 'Generate model page';
+  modelPageBtn.title = 'Draw the whole architecture model as a hierarchy tree on the "Architecture Model" page ' +
+                       '(re-created on every run)';
+  modelPageBtn.style.cssText = validateBtn.style.cssText;
+
   var status = document.createElement('div');
   status.style.cssText = [
     'display:none',
@@ -1130,7 +1136,13 @@ PropertiesPanel.prototype._buildReportButton = function(container) {
   });
 
   wrapper.appendChild(btn);
+  modelPageBtn.addEventListener('click', function() {
+    status.style.display = 'none';
+    self.report.generateModelPage(showStatus);
+  });
+
   wrapper.appendChild(validateBtn);
+  wrapper.appendChild(modelPageBtn);
   wrapper.appendChild(status);
   container.appendChild(wrapper);
   this.reportBtn    = wrapper;

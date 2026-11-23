@@ -4,6 +4,7 @@ var ArchitectureModel      = require('./ArchitectureModel');
 var TechnologyRegistry     = require('./TechnologyRegistry');
 var ValidationReportDialog = require('./ValidationReportDialog');
 var SyncPreviewDialog      = require('./SyncPreviewDialog');
+var ModelDiagram           = require('./ModelDiagram');
 
 /**
  * ArchitectureReport — export, validation and Confluence push of the whole
@@ -49,6 +50,25 @@ ArchitectureReport.prototype.validate = function(onStatus) {
     buttons:  this._withFix(model, [{ label: 'Close', primary: true }],
                             function() { self.validate(onStatus); }),
   });
+};
+
+/**
+ * "Generate model page" (specs §10.9): builds the model and (re)draws it as
+ * a hierarchy tree on the generated model page.
+ */
+ArchitectureReport.prototype.generateModelPage = function(onStatus) {
+  var model = this._build();
+  if (model.elements.length === 0) {
+    onStatus(NO_ELEMENTS, true);
+    return;
+  }
+  var res = ModelDiagram.render(this.ui, this.shapeProps, model, {
+    source:    _fileTitle(this.ui),
+    generated: _today(),
+  });
+  var c = res.counts;
+  onStatus('Model page updated: ' + res.elements + ' elements, ' + c.error + ' error(s), ' +
+           c.warning + ' warning(s).', false);
 };
 
 /**

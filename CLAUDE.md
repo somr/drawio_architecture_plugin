@@ -84,6 +84,11 @@ src/ArchitectureReport.js  Export / Validate / Confluence push orchestration.
                            native save dialog) — desktop writeFile IPC rejects
                            non-diagram content, so it cannot write YAML.
 
+src/ModelDiagram.js       Generated "Architecture Model" page: pure tree
+                           layout (layoutTree) + renderer. The page is wiped
+                           and redrawn each run; its cells carry pp_model_view,
+                           so forEachPage skips the page (specs §10.9).
+
 src/ValidationReportDialog.js  Findings modal; clicking a row navigates to
                            the page + cell.
 
