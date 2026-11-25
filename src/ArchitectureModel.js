@@ -12,6 +12,8 @@ var SEVERITY_ORDER = { error: 0, warning: 1, advisory: 2 };
  *   elements: [ {id, name, type, parent?, technology?, provisioning?, description?} ],
  *   flows:    [ {id?, from, to, declared?, description?, lifted_from?: [{id?, from, to, description?}]} ],
  *   findings: [ {severity, code, message, refs: [{page, pageName, cell}]} ],
+ *   liftCandidates: [ {page, pageName, cell, from, to, fromType, toType,
+ *                      lifted?: {from, to}, reason?, supersededBy?: {from, to}} ],
  *   registry: {name, version} | null,
  * }
  * Elements and flows are in export order. Absent fields are left out.
@@ -212,6 +214,24 @@ function buildModel(ui, sp, registry) {
     return { stuck: from };
   }
 
+  // Cross-level connectors not marked to lift (FLOW-001), with what ticking
+  // "Lift to common level" would do — for the bulk lift (specs §10.7.2).
+  // reason is set when the lift would fail; supersededBy is filled in below.
+  var liftCandidates = [];
+  function liftCandidate(from, to, o) {
+    var c = { page: o.page, pageName: o.pageName, cell: o.cell, from: from, to: to,
+              fromType: elements[from] && elements[from].type, toType: elements[to] && elements[to].type };
+    if (!elements[from] || !elements[to]) {
+      c.reason = '"' + (elements[from] ? to : from) + '" is not an exported element';
+      return c;
+    }
+    var l = lift(from, to);
+    if (l.stuck)                c.reason = '"' + l.stuck + '" has no parent to lift through';
+    else if (l.from === l.to)   c.reason = 'both ends lift to "' + l.from + '", a flow to itself';
+    else                        c.lifted = { from: l.from, to: l.to };
+    return c;
+  }
+
   var reportedFlowProblems = {};
   function reportOnce(code, from, to, message, o) {
     var pkey = code + '\0' + from + '\0' + to;
@@ -268,6 +288,9 @@ function buildModel(ui, sp, registry) {
         return;
       }
 
+      if (problem && problem.code === 'FLOW-001') {
+        liftCandidates.push(liftCandidate(from, to, o));
+      }
       if (problem) {
         var hint = problem.code === 'FLOW-001'
           ? ' If one end is not known in detail, tick "Lift to common level" on the connector.' : '';
@@ -305,6 +328,14 @@ function buildModel(ui, sp, registry) {
              entry.occ.map(ref).concat([ref(by.occ[0])]));
       return false;
     });
+  });
+  // A candidate that would be superseded once lifted (PP-012) is not worth lifting.
+  liftCandidates.forEach(function(c) {
+    if (!c.lifted) return;
+    var by = declaredPairs.filter(function(d) {
+      return isSelfOrBelow(d.from, c.from) && isSelfOrBelow(d.to, c.to);
+    })[0];
+    if (by) c.supersededBy = { from: by.from, to: by.to };
   });
 
   var flowIdOwner = {};          // flow id -> label of its owner
@@ -499,6 +530,7 @@ function buildModel(ui, sp, registry) {
     elements: ordered.map(function(id) { return _publicElement(elements[id]); }),
     flows:    flows.map(_publicFlow),
     findings: findings,
+    liftCandidates: liftCandidates,
     registry: registry ? { name: registry.name, version: registry.version } : null,
   };
 }

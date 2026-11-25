@@ -72,18 +72,86 @@ ArchitectureReport.prototype.generateModelPage = function(onStatus) {
 };
 
 /**
- * Prepends a "Fix N missing IDs" button to a report's buttons when the model
- * has PP-001 findings (specs §10.7.1). The fix previews the IDs, writes them,
- * then calls rerun() so the report is rebuilt from the fixed diagram.
+ * Prepends the bulk-fix buttons to a report's buttons: "Fix N missing IDs"
+ * when the model has PP-001 findings (specs §10.7.1) and "Lift N cross-level
+ * connectors" when it has connectors that could be lifted (specs §10.7.2).
+ * Each fix previews its writes, applies them, then calls rerun() so the
+ * report is rebuilt from the fixed diagram.
  */
 ArchitectureReport.prototype._withFix = function(model, buttons, rerun, onCancel) {
-  var count = model.findings.filter(function(f) { return f.code === 'PP-001'; }).length;
-  if (count === 0) return buttons;
-  var self = this;
-  return [{
-    label:   'Fix ' + count + ' missing ID' + (count > 1 ? 's' : '') + '…',
-    onClick: function() { self.fixMissingIds(rerun, onCancel); },
-  }].concat(buttons);
+  var self  = this;
+  var fixes = [];
+  var ids = model.findings.filter(function(f) { return f.code === 'PP-001'; }).length;
+  if (ids > 0) {
+    fixes.push({
+      label:   'Fix ' + ids + ' missing ID' + (ids > 1 ? 's' : '') + '…',
+      onClick: function() { self.fixMissingIds(rerun, onCancel); },
+    });
+  }
+  var lifts = _liftable(model).length;
+  if (lifts > 0) {
+    fixes.push({
+      label:   'Lift ' + lifts + ' cross-level connector' + (lifts > 1 ? 's' : '') + '…',
+      onClick: function() { self.liftCrossLevel(model, rerun, onCancel); },
+    });
+  }
+  return fixes.concat(buttons);
+};
+
+/** Lift candidates that would be exported as a new lifted connection. */
+function _liftable(model) {
+  return (model.liftCandidates || []).filter(function(c) { return c.lifted && !c.supersededBy; });
+}
+
+/**
+ * Bulk lift (specs §10.7.2): previews every cross-level connector of the
+ * model that can be lifted, with the pair it would be exported as, and sets
+ * prop_flow_lift on the checked ones (one undo step per page). Candidates
+ * that cannot be lifted are listed as notices. Only called from the report
+ * button, so there is at least one liftable connector. onDone() after
+ * writing, onCancel() (optional) when nothing was written.
+ */
+ArchitectureReport.prototype.liftCrossLevel = function(model, onDone, onCancel) {
+  var sp = this.shapeProps;
+  function pair(c) {
+    return '"' + c.from + '" → "' + c.to + '" (' + sp.getLevelLabel(c.fromType) + ' → ' +
+           sp.getLevelLabel(c.toType) + ')';
+  }
+
+  var notices = [];
+  (model.liftCandidates || []).forEach(function(c) {
+    if (c.reason) {
+      notices.push('Not lifted — ' + pair(c) + ' on ' + c.pageName + ': ' + c.reason + '.');
+    } else if (c.supersededBy) {
+      notices.push('Not lifted — ' + pair(c) + ' on ' + c.pageName + ' is already modelled as "' +
+                   c.supersededBy.from + '" → "' + c.supersededBy.to + '"; the connector can be removed.');
+    }
+  });
+
+  var items = _liftable(model).map(function(c) {
+    return {
+      cell: c.cell, page: c.page, pageName: c.pageName,
+      label:  pair(c),
+      detail: 'exported as "' + c.lifted.from + '" → "' + c.lifted.to + '"',
+    };
+  });
+
+  var ui = this.ui;
+  this.previewDialog.show(items, function(selected) {
+    if (selected.length === 0) {
+      if (typeof onCancel === 'function') onCancel();
+      return;
+    }
+    _writeByPage(ui, selected, function(graph, it) { sp.setProperty(graph, it.cell, sp.PROP_FLOW_LIFT, 'true'); });
+    if (typeof onDone === 'function') setTimeout(onDone, 0);
+  }, notices, {
+    title:        'Lift cross-level connectors',
+    subtitle:     'These connectors link elements at different levels, so they are not exported. ' +
+                  'Lifting exports each one as a flow between the ancestors of its ends at the same level ' +
+                  '(for when one end is not known in detail). Untick connectors drawn between levels by mistake.',
+    confirmLabel: 'Lift',
+    onCancel:     onCancel,
+  });
 };
 
 /**
@@ -125,24 +193,7 @@ ArchitectureReport.prototype.fixMissingIds = function(onDone, onCancel) {
       if (typeof onCancel === 'function') onCancel();
       return;
     }
-    var savedPage = ui.currentPage;
-    var byPage = [];
-    selected.forEach(function(it) {
-      var group = byPage.filter(function(g) { return g.page === it.page; })[0];
-      if (!group) byPage.push(group = { page: it.page, items: [] });
-      group.items.push(it);
-    });
-    byPage.forEach(function(g) {
-      if (g.page !== ui.currentPage) ui.selectPage(g.page, true);
-      var graph = ui.editor.graph;
-      graph.model.beginUpdate();
-      try {
-        g.items.forEach(function(it) { sp.setProperty(graph, it.cell, sp.PROP_ID, it.id); });
-      } finally {
-        graph.model.endUpdate();
-      }
-    });
-    if (ui.currentPage !== savedPage) ui.selectPage(savedPage, true);
+    _writeByPage(ui, selected, function(graph, it) { sp.setProperty(graph, it.cell, sp.PROP_ID, it.id); });
     if (typeof onDone === 'function') setTimeout(onDone, 0);
   }, plan.notices, {
     title:        'Fix missing IDs',
@@ -291,6 +342,32 @@ ArchitectureReport.prototype.push = function(cfUploader, onProgress, onDone, tag
     function() { onDone('Push cancelled — nothing was uploaded.'); }),
   });
 };
+
+/**
+ * Applies write(graph, item) to items ({page, cell, …}) spread over several
+ * pages: one undo step per page, switching to each page while writing (a
+ * page's cells can only be changed through its own graph), then back.
+ */
+function _writeByPage(ui, items, write) {
+  var savedPage = ui.currentPage;
+  var byPage = [];
+  items.forEach(function(it) {
+    var group = byPage.filter(function(g) { return g.page === it.page; })[0];
+    if (!group) byPage.push(group = { page: it.page, items: [] });
+    group.items.push(it);
+  });
+  byPage.forEach(function(g) {
+    if (g.page !== ui.currentPage) ui.selectPage(g.page, true);
+    var graph = ui.editor.graph;
+    graph.model.beginUpdate();
+    try {
+      g.items.forEach(function(it) { write(graph, it); });
+    } finally {
+      graph.model.endUpdate();
+    }
+  });
+  if (ui.currentPage !== savedPage) ui.selectPage(savedPage, true);
+}
 
 // ---------------------------------------------------------------------------
 // PNG of the current page, in memory (Confluence push only)

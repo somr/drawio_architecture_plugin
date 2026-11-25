@@ -364,6 +364,35 @@ assert.strictEqual(m4.elements.filter(function(e) { return e.id === 'svc'; })[0]
   m = AM.buildModel(ui([S]), sp, REGISTRY);
   assert.deepStrictEqual(m.flows.map(function(f) { return f.from + '>' + f.to; }), ['a1>b2']);
   assert.deepStrictEqual(m.findings.map(function(f) { return f.code; }), ['PP-012']);
+  assert.deepStrictEqual(m.liftCandidates, [], 'flagged connectors are not candidates');
+
+  // Bulk lift candidates (specs §10.7.2): unflagged FLOW-001 connectors.
+  S.edge(b2, s1);                                     // liftable → s2 > s1
+  S.edge(a1, s2);                                     // a1 > b2 already modelled → superseded
+  var sl = S.shape('sl', 'SL', 'service');
+  S.edge(sl, s1);                                     // no parent → reason
+  S.edge(b2, s2);                                     // own system → flow to itself
+  m = AM.buildModel(ui([S]), sp, REGISTRY);
+  var cands = m.liftCandidates.map(function(c) {
+    return { pair: c.from + '>' + c.to, types: c.fromType + '>' + c.toType, lifted: c.lifted, reason: c.reason,
+             by: c.supersededBy, page: c.pageName };
+  });
+  assert.deepStrictEqual(cands, [
+    { pair: 'b2>s1', types: 'service>software-system', lifted: { from: 's2', to: 's1' }, reason: undefined, by: undefined, page: 'S' },
+    { pair: 'a1>s2', types: 'service>software-system', lifted: { from: 's1', to: 's2' }, reason: undefined,
+      by: { from: 'a1', to: 'b2' }, page: 'S' },
+    { pair: 'sl>s1', types: 'service>software-system', lifted: undefined, reason: '"sl" has no parent to lift through',
+      by: undefined, page: 'S' },
+    { pair: 'b2>s2', types: 'service>software-system', lifted: undefined,
+      reason: 'both ends lift to "s2", a flow to itself', by: undefined, page: 'S' },
+  ]);
+  m.liftCandidates.forEach(function(c) { assert(c.cell && c.cell.edge && c.page === S); });
+
+  // Ticking the liftable one turns it into a lifted flow and removes it from the candidates.
+  m.liftCandidates[0].cell.value.setAttribute('prop_flow_lift', 'true');
+  m = AM.buildModel(ui([S]), sp, REGISTRY);
+  assert.deepStrictEqual(m.liftCandidates.map(function(c) { return c.from + '>' + c.to; }), ['a1>s2', 'sl>s1', 'b2>s2']);
+  assert(m.flows.some(function(f) { return f.from === 's2' && f.to === 's1' && f.declared === false; }));
 })();
 
 console.log('all export checks passed');

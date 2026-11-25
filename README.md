@@ -71,6 +71,8 @@ Problems are listed in a report dialog grouped into errors, warnings and advisor
 
 When shapes have a Name and Level but no ID, the report offers **Fix N missing IDs…**: it previews an ID for each of them (reusing the ID of the same element on other pages, otherwise one made from the name) and sets the ones you keep.
 
+When connectors link elements at different levels, the report offers **Lift N cross-level connectors…**: it previews each one with the pair it would be exported as when lifted to the common level, and ticks *Lift to common level* on the ones you keep. Untick connectors that were drawn between levels by mistake. Connectors that cannot be lifted (no parent to climb through, a flow to itself, already modelled at a lower level) are listed with the reason.
+
 Excerpt of an export:
 
 ```yaml

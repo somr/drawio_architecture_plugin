@@ -4,6 +4,13 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Lift cross-level connectors in bulk** — validation reports with connectors between elements at different levels (`FLOW-001`) offer a *Lift N cross-level connectors…* button. It previews every connector that can be lifted, with the pair it would be exported as, and ticks *Lift to common level* on the selected ones (one undo step per page), then re-runs the report. Connectors that cannot be lifted (no parent to climb through, a flow to itself, already covered by a lower-level flow) are listed with the reason (specs §10.7.2).
+
+---
+
 ## [1.15.0] — 2026-11-25
 
 ### Changed

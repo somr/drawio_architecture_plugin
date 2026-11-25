@@ -654,6 +654,17 @@ When the report has `PP-001` findings, it gets an extra button, **Fix N missing 
 
 The planned IDs are shown in a preview, one row per shape with its page, Name, Level and ID, all checked by default. **Set IDs** writes the checked rows, with one undo step per page, then rebuilds the report it was opened from (Validate, Export or Push) from the fixed diagram. **Cancel** writes nothing. If a Push was in progress, it reports *"Push cancelled — nothing was uploaded."*
 
+#### 10.7.2 Lifting cross-level connectors in bulk
+
+When the file has connectors that fail `FLOW-001` (ends at different levels), are not marked to lift, and could be lifted, the report gets an extra button, **Lift N cross-level connectors…**, after **Fix N missing IDs…** (when shown) and left of the usual buttons, whether it was opened from Validate, Export or Push. N counts connectors, not flows: the same pair drawn on two pages counts twice.
+
+For each such connector, the lift of section 10.5.1 is worked out against the merged model:
+
+- **Liftable** — both ends reach the same rank at two different elements, and no flow drawn at a single level already covers the lifted pair. Listed in the preview, one row per connector with its page, its original pair and levels (`"service-xa" → "system-y" (Service → Software System)`) and the pair it would be exported as (`exported as "system-x" → "system-y"`), all checked by default.
+- **Not liftable** — an end is not an exported element, an element on the way has no parent to lift through (would be `PP-011`), both ends lift to the same element (would be `FLOW-009`), or a single-level flow already covers it (would be `PP-012`; the connector can be removed instead). Listed as notices above the preview, not selectable.
+
+Lifting every cross-level connector would hide connectors drawn between levels by mistake, so the preview is a selection: untick the connectors that should stay errors. **Lift** sets `prop_flow_lift="true"` on the checked connectors, with one undo step per page, then rebuilds the report it was opened from from the changed diagram. **Cancel** writes nothing; if a Push was in progress, it reports *"Push cancelled — nothing was uploaded."* Lifting a connector one at a time stays available in the panel (section 5.7).
+
 ### 10.8 Error conditions (disk export)
 
 Messages are shown in the panel status line next to the button.
