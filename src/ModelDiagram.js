@@ -158,8 +158,8 @@ var SEVERITY_RANK   = { error: 0, warning: 1, advisory: 2 };
 function render(ui, sp, model, meta) {
   var esc = mxUtils.htmlEntities;
 
-  // Pages the elements are drawn on, for links and tooltips (before the
-  // model page exists, so it is not among them).
+  // Pages (and shape cell ids) the elements are drawn on, for links and
+  // tooltips (before the model page exists, so it is not among them).
   var pagesOf = {};
   sp.forEachPage(ui, function(page, pageName, root) {
     sp.walkCells(root, function(c) {
@@ -167,7 +167,9 @@ function render(ui, sp, model, meta) {
       var id = sp.getProperty(c, sp.PROP_ID);
       if (!id) return;
       var list = pagesOf[id] = pagesOf[id] || [];
-      if (!list.some(function(p) { return p.page === page; })) list.push({ page: page, name: pageName });
+      var entry = list.filter(function(p) { return p.page === page; })[0];
+      if (!entry) list.push(entry = { page: page, name: pageName, cells: [] });
+      entry.cells.push(c.getId());
     });
   });
 
@@ -231,10 +233,14 @@ function render(ui, sp, model, meta) {
                    worst + (n === 1 ? '' : 's') + '</font>');
       }
 
+      // Tooltip is HTML (DrawIO sanitises it; newlines are kept). Page names
+      // are links that open the page with the element's shapes selected.
       var tip = [];
-      if (el.description) tip.push(el.description);
-      if (where.length) tip.push('Drawn on: ' + where.map(function(p) { return p.name; }).join(', '));
-      found.forEach(function(f) { tip.push(f.severity.toUpperCase() + ' ' + f.code + ': ' + f.message); });
+      if (el.description) tip.push(esc(el.description));
+      if (where.length) tip.push('Drawn on: ' + where.map(function(p) {
+        return '<a href="' + esc(pageLink(p)) + '">' + esc(p.name) + '</a>';
+      }).join(', '));
+      found.forEach(function(f) { tip.push(esc(f.severity.toUpperCase() + ' ' + f.code + ': ' + f.message)); });
 
       var style = 'rounded=1;whiteSpace=wrap;html=1;arcSize=12;fontSize=12;' +
         'fillColor=' + (LEVEL_FILL[el.type] || '#ffffff') + ';' +
@@ -244,7 +250,7 @@ function render(ui, sp, model, meta) {
       cellOf[el.id] = graph.insertVertex(parent, null, value({
         label:   lines.join('<br>'),
         tooltip: tip.join('\n') || null,
-        link:    where.length ? 'data:page/id,' + where[0].page.getId() : null,
+        link:    where.length ? pageLink(where[0]) : null,
       }), b.x, TOP + b.y, b.w, b.h, style);
     });
 
@@ -263,6 +269,18 @@ function render(ui, sp, model, meta) {
   graph.scrollCellToVisible(title);
 
   return { page: page, elements: model.elements.length, counts: counts };
+}
+
+/**
+ * DrawIO custom link that opens the page and selects (and scrolls to) the
+ * given shapes: { page, cells: [cell id] }.
+ */
+function pageLink(where) {
+  return 'data:action/json,' + JSON.stringify({ actions: [
+    { open: 'data:page/id,' + where.page.getId() },
+    { select: { cells: where.cells } },
+    { scroll: { cells: where.cells } },
+  ] });
 }
 
 /** The existing model page, or null. */
