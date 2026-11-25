@@ -195,6 +195,12 @@ fs.writeFileSync(OUT + '/findings.txt', m2.findings.map(function(f) {
   assert(codes.indexOf(c) !== -1, 'missing finding ' + c);
 });
 assert(codes.indexOf('PP-005') === -1);
+var hier1 = m2.findings.filter(function(f) { return f.code === 'HIER-001' && f.message.indexOf('"lone"') !== -1; });
+assert.strictEqual(hier1.length, 1);
+assert(hier1[0].message.indexOf('Place it inside a Workflow or a Tier, or pick one in its Parent field.') !== -1, hier1[0].message);
+var hier2 = m2.findings.filter(function(f) { return f.code === 'HIER-002' && f.message.indexOf('"bp"') !== -1; });
+assert.strictEqual(hier2.length, 1);
+assert(hier2[0].message.indexOf('A Service belongs inside a Workflow or a Tier.') !== -1, hier2[0].message);
 // errors first
 var sev = m2.findings.map(function(f) { return f.severity; });
 assert.deepStrictEqual(sev.slice().sort(function(x, y) { return ['error','warning','advisory'].indexOf(x) - ['error','warning','advisory'].indexOf(y); }), sev);

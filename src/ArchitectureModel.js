@@ -25,6 +25,14 @@ function buildModel(ui, sp, registry) {
   function label(cell) {
     return '"' + (sp.getProperty(cell, sp.PROP_NAME) || sp.getLabelText(cell) || '(unnamed)') + '"';
   }
+  // 'a Service or a Software System' — the legal parents of the level
+  // (specs §4), named in the HIER-001 / HIER-002 messages.
+  function legalParents(level) {
+    return sp.getParentLevels(level).map(function(l) {
+      var lbl = sp.getLevelLabel(l);
+      return (/^[AEIOU]/.test(lbl) ? 'an ' : 'a ') + lbl;
+    }).join(' or ');
+  }
 
   // -------------------------------------------------------------------------
   // 10.3 Eligible shapes, per page
@@ -144,10 +152,12 @@ function buildModel(ui, sp, registry) {
         report('error', 'HIER-002', 'Organization "' + id + '" cannot have a parent (it has "' + el.parent + '").', at);
       }
     } else if (el.parent === undefined) {
-      report('error', 'HIER-001', sp.getLevelLabel(el.type) + ' "' + id + '" has no parent.', at);
+      report('error', 'HIER-001', sp.getLevelLabel(el.type) + ' "' + id + '" has no parent. Place it inside ' +
+             legalParents(el.type) + ', or pick one in its Parent field.', at);
     } else if (!sp.isLegalParent(el.type, elements[el.parent].type)) {
       report('error', 'HIER-002', sp.getLevelLabel(elements[el.parent].type) + ' "' + el.parent +
-             '" cannot contain ' + sp.getLevelLabel(el.type) + ' "' + id + '".', at);
+             '" cannot contain ' + sp.getLevelLabel(el.type) + ' "' + id + '". A ' + sp.getLevelLabel(el.type) +
+             ' belongs inside ' + legalParents(el.type) + '.', at);
     }
 
     if (el.technology !== undefined) {

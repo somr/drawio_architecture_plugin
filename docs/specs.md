@@ -610,8 +610,8 @@ Building the model produces a list of **findings**. Each finding has a severity,
 | `PP-003` | Error | Shapes of one element disagree on name, type, technology, provisioning or parent (10.4) | First page's value used. |
 | `PP-004` | Warning | Shapes of one element have different descriptions | First used. |
 | `REF-001` | Error | `prop_parent` refers to an ID that is not an exported element | `parent` omitted. |
-| `HIER-001` | Error | A non-Organization element has no parent | Exported without `parent`. |
-| `HIER-002` | Error | Parent's level is not a legal parent for the child's level (section 4) | Exported as is. |
+| `HIER-001` | Error | A non-Organization element has no parent. The message names the legal parent levels (section 4), e.g. for a Node: *Place it inside a Service or a Software System, or pick one in its Parent field.* | Exported without `parent`. |
+| `HIER-002` | Error | Parent's level is not a legal parent for the child's level (section 4). The message names the legal parent levels, e.g. *A Node belongs inside a Service or a Software System.* | Exported as is. |
 | `HIER-004` | Error | Parent links form a cycle | Exported as is; ordered last. |
 | `REF-003` | Error | Node technology is not a key of the registry | Exported as is. |
 | `PP-005` | Warning | No technology registry loaded — technologies were not checked (reported once) | — |
