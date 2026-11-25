@@ -1397,9 +1397,14 @@ PropertiesPanel.prototype._updateParentDisplay = function(cell) {
       var lvl  = sp.getLevelLabel(sp.getProperty(container, sp.PROP_LEVEL));
       this.parentDisplay.textContent = lvl ? name + ' (' + lvl + ')' : name;
       this.parentDisplay.style.color = '#333';
+      this.parentDisplay.title = 'Parent comes from the enclosing container. ' +
+        'Move the shape out of it (or into another container) to change it.';
     } else {
       this.parentDisplay.textContent = level ? '— no parent —' : '—';
       this.parentDisplay.style.color = '#aaa';
+      this.parentDisplay.title = level
+        ? 'An Organization is the top of the hierarchy and has no parent.'
+        : 'Set a Level first to choose a parent.';
     }
     return;
   }
@@ -1444,6 +1449,7 @@ PropertiesPanel.prototype._showParentPlaceholder = function() {
   this.parentDisplay.style.display = '';
   this.parentDisplay.textContent = '—';
   this.parentDisplay.style.color = '#aaa';
+  this.parentDisplay.title = '';
 };
 
 /**

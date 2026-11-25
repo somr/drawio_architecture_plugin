@@ -180,6 +180,8 @@ Technology and Provisioning appear or hide as soon as Level changes. Switching a
 | Level is Organization | Read-only `— no parent —` in grey. |
 | Level not set | Read-only `—`. |
 
+The read-only states carry a tooltip explaining why the field cannot be edited (inside a container: move the shape to change its parent; Organization: no parent; no Level: set a Level first).
+
 When Level changes, the picker's options are rebuilt; a stored `prop_parent` that is no longer legal for the new level is kept but shown as *(invalid)*.
 
 **ID.**
