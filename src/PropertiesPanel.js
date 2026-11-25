@@ -8,6 +8,7 @@ var NodeFields          = require('./NodeFields');
 var TagHighlight        = require('./TagHighlight');
 var ConfluenceUploader  = require('./ConfluenceUploader');
 var SyncPreviewDialog   = require('./SyncPreviewDialog');
+var SearchPane          = require('./SearchPane');
 
 // Inline style strings applied to the Tags input field in its two states.
 // Using full cssText replacements avoids partial-override issues in Electron.
@@ -26,11 +27,12 @@ var _TAGS_INPUT_STYLE_DISABLED = _TAGS_INPUT_BASE + ';background:#f0f0f0;';
  * PropertiesPanel
  *
  * The "Architect toolset" persistent floating panel (mxWindow).
- * Organised as two tabs:
+ * Organised as three tabs:
  *   Properties — Parent, ID, Name, Level, Description, Technology,
  *                Provisioning, Adopt Children, Connected shapes, Also in...;
  *                export / sync / Confluence buttons in the empty state.
  *   Tags       — Tags field for the selected cell; Highlight controls.
+ *   Find       — search the page on screen by name or ID (SearchPane).
  *
  * Panel states:
  *   empty            — no selection, or multiple cells selected
@@ -70,6 +72,7 @@ function PropertiesPanel(ui, shapeProps) {
   this.tagHighlight    = new TagHighlight(ui, shapeProps);
   this.cfUploader      = new ConfluenceUploader(ui);
   this.syncPreviewDlg  = new SyncPreviewDialog(ui, shapeProps);
+  this.searchPane      = new SearchPane(ui, shapeProps);
 
   // Sync UI refs
   this.syncToAllBtn        = null;  // inside "Also in..." section
@@ -89,6 +92,7 @@ function PropertiesPanel(ui, shapeProps) {
   // Tab state
   this._propertiesPane = null;
   this._tagsPane = null;
+  this._findPane = null;
   this._tabBtns = null;
   this._activeTab = 'properties';
 
@@ -143,6 +147,13 @@ PropertiesPanel.prototype.init = function() {
   this._buildTagsPane(tagsPane);
   contentArea.appendChild(tagsPane);
   this._tagsPane = tagsPane;
+
+  // Find pane — hidden until the Find tab is clicked.
+  var findPane = document.createElement('div');
+  findPane.style.display = 'none';
+  this.searchPane.build(findPane);
+  contentArea.appendChild(findPane);
+  this._findPane = findPane;
 
   container.appendChild(contentArea);
 
@@ -224,18 +235,21 @@ PropertiesPanel.prototype._buildTabBar = function(container) {
   this._tabBtns = {
     properties: makeTabBtn('Properties', 'properties'),
     tags:       makeTabBtn('Tags',       'tags'),
+    find:       makeTabBtn('Find',       'find'),
   };
+  this._tabBtns.find.title = 'Find a shape on this page by name or ID';
 
   container.appendChild(bar);
 };
 
 PropertiesPanel.prototype._switchTab = function(name) {
   var self = this;
+  var previous = this._activeTab;
   this._activeTab = name;
-  var isProps = (name === 'properties');
 
-  if (this._propertiesPane) this._propertiesPane.style.display = isProps ? '' : 'none';
-  if (this._tagsPane)       this._tagsPane.style.display       = isProps ? 'none' : '';
+  if (this._propertiesPane) this._propertiesPane.style.display = (name === 'properties') ? '' : 'none';
+  if (this._tagsPane)       this._tagsPane.style.display       = (name === 'tags')       ? '' : 'none';
+  if (this._findPane)       this._findPane.style.display       = (name === 'find')       ? '' : 'none';
 
   if (this._tabBtns) {
     Object.keys(this._tabBtns).forEach(function(k) {
@@ -249,6 +263,8 @@ PropertiesPanel.prototype._switchTab = function(name) {
   if (name === 'tags') {
     this._refreshHighlightDropdown();
   }
+  if (name === 'find' && previous !== 'find') this.searchPane.onShow();
+  else if (name !== 'find' && previous === 'find') this.searchPane.onHide();
 };
 
 // ---------------------------------------------------------------------------

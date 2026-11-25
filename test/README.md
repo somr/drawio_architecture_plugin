@@ -9,6 +9,7 @@ node test/model.check.js    # ShapeProperties + TechnologyRegistry: hierarchy, I
 node test/export.check.js   # ArchitectureModel: metamodel §18 example over two pages
                             # (zero findings, YAML layout) + every validation code
 node test/modelpage.check.js # ModelDiagram tree layout + model page skipped by forEachPage
+node test/search.check.js    # ShapeSearch: entries collected, ranking, accents/separators, fuzzy
 ```
 
 Each prints `all … checks passed` or throws on the first failed assertion.

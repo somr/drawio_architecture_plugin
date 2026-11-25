@@ -6,7 +6,7 @@ A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds
 
 ### Properties panel
 A persistent floating panel titled **Architect toolset** always visible while the plugin is loaded.
-The panel is organised into two tabs: **Properties** and **Tags**.
+The panel is organised into three tabs: **Properties**, **Tags** and **Find**.
 
 #### Properties tab
 For a selected **shape**:
@@ -115,6 +115,13 @@ Node technologies come from a registry in a small configuration file installed n
 - **Tags field** — a comma-separated list of tags for the selected shape or connector. Saves on blur.
 - **Highlight section** — select any tag from the dropdown and click **Activate** to visually emphasise all shapes and connectors carrying that tag and de-emphasise everything else. Click **Clear** to restore original styles. The highlight is applied as an undoable operation.
 
+#### Find tab
+Finds a shape or connector on the page on screen by its **name, ID or label** — handy on crowded pages. Results are listed as you type, best match first (exact ID, then ID / name starting with the text, then text found anywhere, then a loose letters-in-order match); case, accents and separators are ignored, so `payment svc` finds `payment-svc`. Each row shows the name, ID and level, with badges for *ignored*, *hidden*, *in collapsed group* and *locked* shapes.
+
+- **↑ / ↓** preview: centre the view on the shape and flash it, without selecting it.
+- **Enter** or **click**: select the shape — the Properties tab (or the missing-properties popup) shows it. Shapes in a hidden layer or collapsed group are revealed first (undoable).
+- **Esc** clears the search.
+
 ### Confluence push
 A **Confluence** section in the Properties tab pushes the architecture model (`{diagramname}.yaml`, whole file) and a PNG of the current page to one or more Confluence pages as attachments, without writing files to disk. The same validation report is shown first. Target pages are declared via a `confluence_page` diagram property (one URL per line, must contain `/pages/{id}/`). Credentials (base URL, email, API token) are stored in `localStorage` and managed via a collapsible settings form.
 
@@ -195,7 +202,9 @@ src/
   TechnologyRegistry.js     Loads and validates window.ArchitectureConfig
   NodeFields.js             Technology / Provisioning controls (panel + dialog)
   LevelSelect.js            Level dropdown with the Workflow / Tier group
-  PropertiesPanel.js        Persistent mxWindow panel UI (Properties + Tags tabs)
+  PropertiesPanel.js        Persistent mxWindow panel UI (Properties, Tags, Find tabs)
+  SearchPane.js             Find tab: search box, results, preview / select
+  ShapeSearch.js            Find tab search: entries and ranking (pure)
   PropertiesDialog.js       Missing-properties modal dialog (with cross-page pre-fill)
   SyncPreviewDialog.js      Cross-page sync preview modal (checkable target list)
   ArchitectureModel.js      Whole-file model: merge, validation, YAML

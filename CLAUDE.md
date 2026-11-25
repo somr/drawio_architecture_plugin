@@ -42,8 +42,8 @@ src/ShapeProperties.js     Pure utility module. All reads/writes of custom cell
                            cross-page matching helpers (findCrossPageMatches,
                            getLabelText, getShapeTypeKey).
 
-src/PropertiesPanel.js     Creates the persistent mxWindow panel (two tabs:
-                           Properties and Tags). States: empty, populated,
+src/PropertiesPanel.js     Creates the persistent mxWindow panel (three tabs:
+                           Properties, Tags and Find). States: empty, populated,
                            ignored, edge, connectorIgnored. Saves on field blur
                            via ShapeProperties. Owns the "Sync to all matching
                            pages" button and "Sync cross-page shapes" button.
@@ -61,6 +61,13 @@ src/SyncPreviewDialog.js   Modal that previews proposed cross-page property
                            "Sync to all" and "Sync cross-page shapes" actions.
 
 src/TagHighlight.js        Tag highlight engine — activate/clear/style merge.
+
+src/SearchPane.js          Find tab (specs §5.8): search box + ranked results;
+                           ↑/↓ preview (scroll + flash), Enter/click selects,
+                           reveals hidden/collapsed shapes on select.
+
+src/ShapeSearch.js         Pure search for the Find tab: collectEntries (one
+                           per searchable cell) + ranking. Testable in Node.
 
 src/LevelSelect.js         Fills a Level <select> from ShapeProperties.LEVELS,
                            grouping same-rank levels (Workflow / Tier) in an

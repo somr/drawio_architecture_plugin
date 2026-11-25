@@ -281,6 +281,36 @@ When a single connector is selected (and not ignored), the panel switches to con
 
 ---
 
+### 5.8 Find Tab
+
+A third panel tab, **Find**, locates a shape or connector on the page on screen by its ID, Name or visible label — for crowded pages where the element is hard to spot.
+
+**What is searched.** Every vertex and connector of the current page (all layers) that has a `prop_id`, a `prop_name` or a non-empty label. HTML is stripped from labels. Ignored shapes are listed, dimmed and marked *ignored*. Other pages are not searched.
+
+**Matching.** Case, accents and repeated spaces are ignored; for IDs, separators are ignored too (`payment svc` finds `payment-svc`). Results are ranked, best first:
+
+1. exact ID
+2. ID starts with the query
+3. exact Name
+4. Name starts with the query
+5. every query word starts a word of the Name (`pay serv` → *Payment Service*), or the query starts a later word of the Name
+6. ID contains the query
+7. Name contains the query
+8. label (when it differs from the Name) starts with / contains the query
+9. fuzzy: the query's letters appear in order in the Name, ID or label (queries of 3+ characters without spaces; tighter matches rank higher)
+
+Ties go to the shorter matched text, then the shorter name, then alphabetical order. At most 50 results are listed ("Showing 50 of N" asks the user to narrow the query).
+
+**Results.** Each row shows the Name (or the label when there is no Name) with the matched text emphasised, then the ID (or *no ID*), the Level (or *Connector*) and badges: *ignored*, *hidden* (the shape, its layer or an ancestor is hidden), *in collapsed group*, *locked*. A status line gives the match count and the page name. The list refreshes as the diagram changes and when the page is switched.
+
+**Navigation.**
+- Typing filters as you type. Opening the tab focuses the search box and keeps the previous query.
+- **↑ / ↓** preview: the viewport centres on the shape and it flashes briefly; the selection does not change.
+- **Enter** (first result by default) or **click** selects the shape: viewport centred, shape flashed and selected. The normal selection flow follows (section 5.2), so the Properties tab — or the missing-properties popup (section 6) — shows it.
+- A *hidden* or *in collapsed group* shape is revealed on select (layer/ancestors shown, groups expanded) as one undoable change; previewing it only shows a note.
+- A shape on a locked layer cannot be selected: it is centred and flashed, and a note says so.
+- **Esc** clears the query (a second Esc leaves the box). The × button also clears it.
+
 ## 6. Missing Properties Popup
 
 ### 6.1 Trigger
