@@ -215,6 +215,35 @@ assert.deepStrictEqual(m3.findings.map(function(f) { return f.code; }), ['WF-004
 w.edge(p4, p1);
 assert.deepStrictEqual(AM.buildModel(ui([w]), sp, REGISTRY).findings, []);
 
+// WF-001 / WF-003 messages: a Service drawn over a Workflow but not nested in
+// it (parent from its Parent property) is named on WF-001; WF-003 names the
+// parent origin and the other Services.
+var g = makePage('G');
+var go = g.shape('o', 'O', 'organization'), gs = g.shape('sy', 'Sy', 'software-system', go);
+var wfA = g.shape('wf-a', 'WF A', 'workflow', gs);
+var wfB2 = g.shape('wf-b', 'WF B', 'workflow', gs);
+gs.geometry = { x: 100, y: 100, width: 1000, height: 600 };
+wfA.geometry = { x: 10, y: 10, width: 300, height: 200 };     // absolute 110,110 – 410,310
+wfB2.geometry = { x: 400, y: 10, width: 300, height: 200 };
+var over = g.shape('over', 'Over', 'service', null, { prop_parent: 'wf-b' });
+over.geometry = { x: 150, y: 150, width: 80, height: 40 };    // top level, centre inside wf-a
+var q1 = g.shape('q1', 'Q1', 'service', wfB2), q2 = g.shape('q2', 'Q2', 'service', wfB2);
+q1.geometry = { x: 20, y: 20, width: 80, height: 40 };        // nested: absolute 520,130 – outside wf-a
+g.edge(q1, q2);
+var mg = AM.buildModel(ui([g]), sp, REGISTRY);
+assert.deepStrictEqual(mg.findings.map(function(f) { return f.code; }), ['WF-001', 'WF-003']);
+var wf001 = mg.findings[0], wf003 = mg.findings[1];
+assert(wf001.message.indexOf('Drawn inside it but belonging elsewhere: "over" (parent "wf-b", set by its Parent property on page "G")') !== -1, wf001.message);
+assert.strictEqual(wf001.refs.length, 2);
+assert.strictEqual(wf001.refs[1].cell, over);
+assert(wf003.message.indexOf('Service "over" takes part in no flow inside Workflow "wf-b" (set by its Parent property on page "G")') === 0, wf003.message);
+assert(wf003.message.indexOf('Services: "q1", "q2".') !== -1, wf003.message);
+var wf003b = m2.findings.filter(function(f) { return f.code === 'WF-003'; })[0];
+assert(wf003b.message.indexOf('Workflow "wf2" (nested in it on page "A")') !== -1, wf003b.message);
+// no geometry → generic hint only
+var wf001b = m2.findings.filter(function(f) { return f.code === 'WF-001'; })[0];
+assert(wf001b.message.indexOf('Drawn inside') === -1 && wf001b.message.indexOf('names the Workflow as its Parent') !== -1);
+
 // FLOW-009: an edge between two shapes that are the same element
 var f9 = makePage('F9');
 var oo = f9.shape('o', 'O', 'organization'), ss = f9.shape('sy', 'Sy', 'software-system', oo);

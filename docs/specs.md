@@ -623,8 +623,8 @@ Building the model produces a list of **findings**. Each finding has a severity,
 | `PP-010` | Advisory | A cross-level connector is exported lifted (10.5.1) | Added under `lifted_from` of the lifted flow. |
 | `PP-011` | Error | A connector marked to be lifted cannot be lifted: an end is not an exported element, or has no parent to climb through | Connector not exported. |
 | `PP-012` | Advisory | A lifted connector is already modelled by a flow drawn at a single level (10.5.1) | Entry left out. |
-| `WF-001` | Error | Workflow contains no Service | — |
-| `WF-003` | Error | In a multi-Service Workflow, a Service takes part in no internal flow (a Service flow whose other end is in the same Workflow) | — |
+| `WF-001` | Error | Workflow contains no Service. The message names any Service drawn inside the Workflow's area on the same page (centre within its bounds) that resolves to another parent or none, with where that parent comes from, and links to it | — |
+| `WF-003` | Error | In a multi-Service Workflow, a Service takes part in no internal flow (a Service flow whose other end is in the same Workflow). The message says how the Service's parent was found (nesting or Parent property, and on which page) and lists the Workflow's other Services | — |
 | `WF-004` | Error | A multi-Service Workflow's internal Service flows, ignoring direction, do not connect all its Services | — |
 
 The general rule: the export is **faithful** to the diagram. It only drops or changes content where the output would otherwise not be well-formed (unresolvable references, duplicate IDs, invalid flows); everything else is exported as drawn and reported.

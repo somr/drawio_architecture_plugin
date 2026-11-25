@@ -360,6 +360,37 @@ function buildModel(ui, sp, registry) {
   // -------------------------------------------------------------------------
   // Workflow rules (WF-001 / WF-003 / WF-004)
   // -------------------------------------------------------------------------
+  // How an element's (merged) parent was found, for messages:
+  // 'nested in it on page "P"' or 'set by its Parent property on page "P"'.
+  function parentOrigin(el) {
+    var o = el._parentRef;
+    return (sp.resolveParent(o.cell).source === 'container' ? 'nested in it' : 'set by its Parent property') +
+           ' on page "' + o.pageName + '"';
+  }
+
+  // Services drawn within a Workflow's area (centre inside its bounds) on the
+  // Workflow's own pages but resolving to another parent — the usual cause of
+  // WF-001 (specs §10.7). Returns [{id, o}], one per Service.
+  function servicesDrawnInside(wfId) {
+    var found = [], seen = {};
+    elements[wfId]._occ.forEach(function(w) {
+      var wb = _absBounds(w.cell);
+      if (!wb) return;
+      occurrences.forEach(function(o) {
+        if (o.page !== w.page || seen[o.id] || !o.id || !elements[o.id]) return;
+        var el = elements[o.id];
+        if (el.type !== 'service' || el.parent === wfId) return;
+        var b = _absBounds(o.cell);
+        if (!b) return;
+        var cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+        if (cx < wb.x || cy < wb.y || cx > wb.x + wb.width || cy > wb.y + wb.height) return;
+        seen[o.id] = true;
+        found.push({ id: o.id, o: o });
+      });
+    });
+    return found;
+  }
+
   order.forEach(function(wfId) {
     var wf = elements[wfId];
     if (wf.type !== 'workflow') return;
@@ -368,7 +399,18 @@ function buildModel(ui, sp, registry) {
       return elements[id].parent === wfId && elements[id].type === 'service';
     });
     if (services.length === 0) {
-      report('error', 'WF-001', 'Workflow "' + wfId + '" contains no Service.', at);
+      var inside = servicesDrawnInside(wfId);
+      var msg = 'Workflow "' + wfId + '" contains no Service.';
+      if (inside.length) {
+        msg += ' Drawn inside it but belonging elsewhere: ' + inside.map(function(s) {
+          var el = elements[s.id];
+          return '"' + s.id + '" (' + (el.parent === undefined ? 'no parent'
+            : 'parent "' + el.parent + '", ' + parentOrigin(el)) + ')';
+        }).join(', ') + '.';
+      }
+      msg += ' A Service belongs to a Workflow when it is nested in the Workflow shape (it moves with it)' +
+             ' or names the Workflow as its Parent.';
+      report('error', 'WF-001', msg, at.concat(inside.map(function(s) { return ref(s.o); })));
       return;
     }
     if (services.length === 1) return;
@@ -381,7 +423,11 @@ function buildModel(ui, sp, registry) {
     internal.forEach(function(f) { participating[f.from] = participating[f.to] = true; });
     var idle = services.filter(function(id) { return !participating[id]; });
     idle.forEach(function(id) {
-      report('error', 'WF-003', 'Service "' + id + '" takes part in no flow inside Workflow "' + wfId + '".',
+      var others = services.filter(function(o) { return o !== id; });
+      report('error', 'WF-003', 'Service "' + id + '" takes part in no flow inside Workflow "' + wfId + '" (' +
+             parentOrigin(elements[id]) + '). It needs a Service → Service connector to another of the Workflow\'s ' +
+             'Services: ' + others.map(function(o) { return '"' + o + '"'; }).join(', ') + '. Connectors between ' +
+             'their Nodes, to Services of other Workflows, or not exported do not count.',
              [ref(elements[id]._occ[0])]);
     });
     if (idle.length > 0) return;   // WF-004 would only repeat it
@@ -444,6 +490,22 @@ function buildModel(ui, sp, registry) {
     findings: findings,
     registry: registry ? { name: registry.name, version: registry.version } : null,
   };
+}
+
+// Absolute bounds of a vertex from the model alone (any page, not only the
+// current graph): its geometry plus the offsets of its ancestors. null when a
+// geometry is missing or relative.
+function _absBounds(cell) {
+  var g = cell && cell.geometry;
+  if (!g || g.relative) return null;
+  var x = g.x, y = g.y;
+  for (var p = cell.parent; p; p = p.parent) {
+    var pg = p.geometry;
+    if (!pg) continue;
+    if (pg.relative) return null;
+    x += pg.x; y += pg.y;
+  }
+  return { x: x, y: y, width: g.width, height: g.height };
 }
 
 function _publicElement(el) {
