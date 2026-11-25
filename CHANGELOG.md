@@ -4,6 +4,14 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
+## [1.15.0] — 2026-11-25
+
+### Changed
+- **Connectors to shapes outside the model are skipped silently** — a connector with a loose end, or an end on an ignored shape or on a shape with no architecture property (an annotation; tags alone do not count), is left out of the export without a `PP-007` warning. The panel still says why it is not exported, without the ⚠ marker. `PP-007` remains for ends on shapes that carry some architecture property but cannot be exported (no ID, no Name/Level, invalid ID).
+- **Clearer `WF-001` / `WF-003` messages** — `WF-001` names the Services drawn inside the Workflow that belong to another parent (and where that parent comes from), with links to them; `WF-003` says how the Service's parent was found (nesting or Parent property, and on which page) and lists the Workflow's other Services.
+
+---
+
 ## [1.14.0] — 2026-11-23
 
 ### Added

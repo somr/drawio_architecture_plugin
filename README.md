@@ -1,4 +1,4 @@
-# DrawIO Architecture Properties Plugin (v1.14.0)
+# DrawIO Architecture Properties Plugin (v1.15.0)
 
 A plugin for the [DrawIO](https://www.drawio.com/) desktop application that adds structured architecture properties to diagram shapes and connectors, enforces the architecture hierarchy, and exports the whole diagram as a model conforming to the **Architecture Metamodel V1** ([`docs/architecture-metamodel.md`](docs/architecture-metamodel.md)).
 
