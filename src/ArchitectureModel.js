@@ -227,6 +227,7 @@ function buildModel(ui, sp, registry) {
       if (!e.edge || sp.isIgnored(e)) return;
       var o = { page: page, pageName: pageName, cell: e };
       var problem = sp.getFlowProblem(e);
+      if (problem && problem.skip) return;        // an end is outside the model
       if (problem && problem.code === 'PP-007') {
         report('warning', 'PP-007', 'Connector ' + _connectorLabel(sp, e) + ': ' + problem.message, [ref(o)]);
         return;

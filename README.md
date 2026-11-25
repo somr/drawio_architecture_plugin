@@ -23,7 +23,7 @@ For a selected **connector**:
 - **ID** — optional
 - **Name** — optional display label (not exported)
 - **Description** — optional
-- **Connects** — the source and target shape names as clickable links, plus a warning when the connector would not be exported as a flow (loose end, end without ID, ends at different levels, …)
+- **Connects** — the source and target shape names as clickable links, plus a warning when the connector would not be exported as a flow (end without ID, ends at different levels, …). A connector with a loose end, or an end on an ignored shape or on a shape with no architecture properties (an annotation), is simply not part of the model: it is left out without a warning
 - **Lift to common level** — shown when the ends are at different levels. Tick it when one end is not known in detail (e.g. a Service talks to another Software System, but you don't know which part of it): the export writes the flow between the ancestors of both ends that are at the same level and keeps the original connection under `lifted_from`
 - **Ignore this connector** — excludes it from property management and from the export
 

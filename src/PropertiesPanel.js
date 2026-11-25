@@ -1017,7 +1017,7 @@ PropertiesPanel.prototype._updateConnectorEndpoints = function(cell) {
   var crossLevel = problem && problem.code === 'FLOW-001';
   if (problem && !(crossLevel && lifted)) {
     var warn = document.createElement('div');
-    warn.textContent = '⚠ ' + problem.message;
+    warn.textContent = (problem.skip ? '' : '⚠ ') + problem.message;
     warn.title = problem.code;
     warn.style.cssText = 'font-size:10px;color:#999;margin-top:4px;line-height:1.3;';
     div.appendChild(warn);

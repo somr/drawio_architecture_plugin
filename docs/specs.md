@@ -269,7 +269,7 @@ When a single connector is selected (and not ignored), the panel switches to con
 
   Each name is the connected shape's `prop_name`. If a connected shape has no `prop_name`, is marked as ignored, or the connector endpoint is unattached, the name is shown as **anonymous** in grey italic and is not clickable.
 
-- Below the Connects line, a single grey warning line is shown when the connector would not be exported as a flow, with the reason: an endpoint is anonymous or has no ID, the endpoints are at different abstraction levels (`FLOW-001`), both ends are the same element (`FLOW-009`), or an end is an Organization (`FLOW-010`). These are the same checks as the export (section 10.7).
+- Below the Connects line, a single grey warning line is shown when the connector would not be exported as a flow, with the reason: an endpoint is anonymous or has no ID, the endpoints are at different abstraction levels (`FLOW-001`), both ends are the same element (`FLOW-009`), or an end is an Organization (`FLOW-010`). These are the same checks as the export (section 10.7). When an end is outside the model (see section 10.5) the line states that, without the ⚠ marker, since it is not a problem.
 
 - On a cross-level connector (`FLOW-001`), a checkbox **Lift to common level — one end is not known in detail** is shown below the Connects line. Ticking it sets `prop_flow_lift="true"` (undoable); unticking removes it. While ticked, the `FLOW-001` warning is replaced by a note that the connector is exported lifted (section 10.5.1). If the flag is set on a connector whose ends are at the same level, the checkbox stays visible with the note *"Has no effect: the ends are not at different levels."* so it can be cleared.
 
@@ -435,7 +435,7 @@ Two shapes with the same ID **on the same page** are a duplicate (`ID-001`): the
 - it is not ignored, and
 - both its source and target terminals are eligible shapes (10.3) — the terminal shape itself, not an ancestor.
 
-`from` and `to` are the `prop_id`s of the terminal shapes. A connector with a dangling end, or an end on a non-eligible shape (no ID, no Name/Level, ignored, or not a vertex), is left out and reported as a warning — so every exported `from`/`to` resolves to an element (`REF-002`).
+`from` and `to` are the `prop_id`s of the terminal shapes. A connector with an end **outside the model** — a loose end (not attached to a shape, or attached to another connector), an ignored shape, or a shape with no architecture property at all (none of `prop_id`, `prop_name`, `prop_level`, `prop_description`, `prop_parent`, `prop_technology`, `prop_provisioning`; `prop_tags` does not count) — is left out silently: it links the model to annotations, not two elements. A connector whose ends are both meant to be modelled but one cannot be exported (it has some architecture property but no ID, no Name/Level, or an invalid ID) is left out and reported as a warning (`PP-007`). Either way every exported `from`/`to` resolves to an element (`REF-002`).
 
 **Merging.** Candidates are grouped by the ordered pair `(from, to)`; each group becomes one flow (`A → B` and `B → A` are different flows).
 
@@ -614,7 +614,7 @@ Building the model produces a list of **findings**. Each finding has a severity,
 | `REF-003` | Error | Node technology is not a key of the registry | Exported as is. |
 | `PP-005` | Warning | No technology registry loaded — technologies were not checked (reported once) | — |
 | `PP-006` | Error | Provisioning is not `IAC`, `EXTERNAL` or `RUNTIME` | Exported as is. |
-| `PP-007` | Warning | Connector end is dangling or on a non-exported shape | Connector not exported. |
+| `PP-007` | Warning | Connector end is on a shape with some architecture property that is not exported (no ID, no Name/Level, invalid ID). Loose ends and ends on ignored or property-less shapes are skipped silently (10.5) | Connector not exported. |
 | `FLOW-001` | Error | Flow between different abstraction levels, connector not marked to be lifted | Flow not exported. |
 | `FLOW-009` | Error | Flow from an element to itself, also when a lifted connector's ends lift to the same element | Flow not exported. |
 | `FLOW-010` | Error | Flow to or from an Organization | Flow not exported. |

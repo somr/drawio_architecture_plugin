@@ -172,8 +172,16 @@ assert.deepStrictEqual(sp.getParentCandidates(U, 'organization'), []);
 // flow problems
 function edge(s, t, attrs) { return { edge: true, value: new El(attrs || {}), source: s, target: t }; }
 assert.strictEqual(sp.getFlowProblem(edge(node, topic)), null);
-assert.strictEqual(sp.getFlowProblem(edge(node, null)).code, 'PP-007');
+// an end outside the model: loose, ignored, or no architecture properties → skipped, not a finding
+assert.strictEqual(sp.getFlowProblem(edge(node, null)).code, 'SKIP');
+assert.strictEqual(sp.getFlowProblem(edge(null, node)).skip, true);
+assert.strictEqual(sp.getFlowProblem(edge(node, cell({ prop_name: 'X', prop_level: 'node', prop_id: 'x', properties_ignored: 'true' }))).code, 'SKIP');
+assert.strictEqual(sp.getFlowProblem(edge(node, cell({ label: 'Note', prop_tags: 'aws' }))).code, 'SKIP'); // tags only
+assert.strictEqual(sp.getFlowProblem(edge(cell({ label: 'Box' }), fresh)).code, 'SKIP'); // skip wins over the other end's error
+// an end with some architecture property but incomplete → PP-007
 assert.strictEqual(sp.getFlowProblem(edge(node, fresh)).code, 'PP-007'); // fresh has no id
+assert.strictEqual(sp.getFlowProblem(edge(node, cell({ prop_description: 'half done' }))).code, 'PP-007');
+assert.strictEqual(sp.getFlowProblem(edge(node, cell({ prop_name: 'N', prop_level: 'node', prop_id: 'Bad Id' }))).code, 'PP-007');
 assert.strictEqual(sp.getFlowProblem(edge(svc, node)).code, 'FLOW-001');
 assert.strictEqual(sp.getFlowProblem(edge(svc, lone)).code, 'FLOW-009');
 var org = p1.add(cell({ prop_name: 'Org', prop_level: 'organization', prop_id: 'org' }, [5000, 0, 1, 1]));

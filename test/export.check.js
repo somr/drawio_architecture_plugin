@@ -174,12 +174,18 @@ var c2 = a.shape('cy2', 'Cy2', 'software-system', null, { prop_parent: 'cy1' });
 var n1 = a.shape('n1', 'N1', 'node', s1, { prop_technology: 'MAINFRAME', prop_provisioning: 'Terraform' }); // REF-003, PP-006
 a.edge(s1, n1);                                                             // FLOW-001
 a.edge(org, a.shape('org2', 'Org2', 'organization'));                       // FLOW-010
-a.edge(s1, null);                                                           // PP-007
+a.edge(s1, null);                                                           // loose end → skipped silently
+var note = a.shape(null, 'Note', null); note.value.removeAttribute('prop_name'); note.value.removeAttribute('prop_level');
+a.edge(s1, note);                                                           // decoration → skipped silently
+a.edge(s2, a.shape(null, 'Half', 'service'));                               // PP-007 (no id; also PP-001)
 a.edge(lone, lone, { properties_ignored: 'true' });                         // ignored → nothing
 var wfB = b.shape('wf', 'WF renamed', 'workflow', null, { prop_description: 'two' }); // PP-003 name, PP-004
 b.edge(b.shape('s1', 'S1', 'service'), a.shape('x-s1', 'X', 'service')); // cross-page edge? separate pages: s1 copy → FLOW-009 below
 var s1b = b.shape('s1', 'S1', 'service');                                   // second s1 on page B → ID-001 on B
 var m2 = AM.buildModel(ui([a, b]), sp, REGISTRY);
+var pp007 = m2.findings.filter(function(f) { return f.code === 'PP-007'; });
+assert.strictEqual(pp007.length, 1, pp007.map(function(f) { return f.message; }).join('\n'));
+assert(pp007[0].message.indexOf('Target shape has no ID.') !== -1);
 var codes = m2.findings.map(function(f) { return f.code; });
 fs.writeFileSync(OUT + '/findings.txt', m2.findings.map(function(f) {
   return f.severity + ' ' + f.code + ' ' + f.message + ' @ ' + f.refs.map(function(r) { return r.pageName; }).join(',');

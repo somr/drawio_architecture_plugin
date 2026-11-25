@@ -959,10 +959,27 @@ function getParentCandidates(ui, level, excludeId) {
 // Flow checks (specs §10.5) — shared by the panel warning and the export
 // ---------------------------------------------------------------------------
 
+// Properties that make a shape (meant to be) part of the architecture model.
+// prop_tags is left out: tags only drive highlighting.
+var ARCHITECTURE_PROPS = [PROP_ID, PROP_NAME, PROP_LEVEL, PROP_DESCRIPTION, PROP_PARENT,
+                          PROP_TECHNOLOGY, PROP_PROVISIONING];
+
+/** True when the cell carries at least one architectural property. */
+function hasArchitectureProps(cell) {
+  return ARCHITECTURE_PROPS.some(function(k) { return !!getProperty(cell, k); });
+}
+
+// Why a connector end is outside the model (the connector is then skipped
+// silently, specs §10.5), or null when it is on a shape meant to be modelled.
+function _endpointOutside(terminal, which) {
+  if (!terminal || !terminal.vertex) return which + ' end is not attached to a shape.';
+  if (isIgnored(terminal))           return which + ' shape is ignored.';
+  if (!hasArchitectureProps(terminal)) return which + ' shape has no architecture properties.';
+  return null;
+}
+
+// Why a modelled connector end cannot be exported (PP-007), or null.
 function _endpointProblem(terminal, which) {
-  if (!terminal)                return which + ' end is not attached to a shape.';
-  if (!terminal.vertex)         return which + ' end is not attached to a shape.';
-  if (isIgnored(terminal))      return which + ' shape is ignored.';
   if (!getProperty(terminal, PROP_NAME) || !isValidLevel(getProperty(terminal, PROP_LEVEL))) {
     return which + ' shape has no Name or Level.';
   }
@@ -982,11 +999,17 @@ function isFlowLifted(edge) {
 /**
  * Why a connector would not be exported as a flow, or null if it would.
  * Returns { code, message }. Ignored connectors return null (excluding them is
- * deliberate, not a problem). Works on edges of any page.
+ * deliberate, not a problem). A connector with an end outside the model (loose,
+ * on an ignored shape, or on a shape with no architecture properties) returns
+ * { code: 'SKIP', skip: true, message }: not exported, but not a finding.
+ * Works on edges of any page.
  */
 function getFlowProblem(edge) {
   if (!edge || !edge.edge || isIgnored(edge)) return null;
   var src = edge.source, tgt = edge.target;
+
+  var out = _endpointOutside(src, 'Source') || _endpointOutside(tgt, 'Target');
+  if (out) return { code: 'SKIP', skip: true, message: out + ' Not part of the model, so not exported.' };
 
   var p = _endpointProblem(src, 'Source') || _endpointProblem(tgt, 'Target');
   if (p) return { code: 'PP-007', message: p + ' The connector is not exported.' };
@@ -1066,6 +1089,7 @@ module.exports = {
   collectElements,
   getParentCandidates,
   getFlowProblem,
+  hasArchitectureProps,
   isFlowLifted,
   forEachPage: _forEachPage,
   PROP_MODEL_VIEW,
