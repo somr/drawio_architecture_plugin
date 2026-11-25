@@ -4,10 +4,16 @@ All notable changes to the DrawIO Architecture Properties Plugin are documented 
 
 ---
 
-## [Unreleased]
+## [1.16.0] — 2026-11-25
 
 ### Added
+- **Find tab** — a third panel tab finds a shape or connector on the page on screen by name, ID or label as you type, best match first (exact ID down to a loose letters-in-order match; case, accents and ID separators ignored). **↑ / ↓** centre the view on a result and flash it without selecting it; **Enter** or a click selects it, revealing it first if it is in a hidden layer or a collapsed group; **Esc** clears. Rows show the ID, level and *ignored* / *hidden* / *locked* badges (specs §5.8).
 - **Lift cross-level connectors in bulk** — validation reports with connectors between elements at different levels (`FLOW-001`) offer a *Lift N cross-level connectors…* button. It previews every connector that can be lifted, with the pair it would be exported as, and ticks *Lift to common level* on the selected ones (one undo step per page), then re-runs the report. Connectors that cannot be lifted (no parent to climb through, a flow to itself, already covered by a lower-level flow) are listed with the reason (specs §10.7.2).
+
+### Changed
+- **Model page links open the shape** — each page named in a box's *Drawn on* tooltip line opens that page with the element's shapes selected and scrolled into view; the box's own link does the same for its first page (specs §10.9).
+- **`HIER-001` / `HIER-002` say where the shape belongs** — orphan and wrong-parent findings name the legal parent levels, e.g. *Place it inside a Service or a Software System, or pick one in its Parent field.*
+- **Read-only Parent field explained** — its tooltip says why it cannot be edited (inside a container: move the shape; Organization: no parent; no Level: set one first).
 
 ---
 
